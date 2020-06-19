@@ -1,0 +1,291 @@
+---
+title: "roughness and breathiness trees"
+author: "Xinyu Zhang"
+date: "6/20/2020"
+output: html_document
+---
+
+```{r setup, include=FALSE}
+knitr::opts_chunk$set(echo = TRUE)
+```
+
+Adding a new column for the mean of the two listeners, in order to use that as the response variable:
+```{r}
+library(dplyr)
+#reading in listening test results
+listener1 <- read.csv("Results_AK.csv", header = TRUE, sep = ";")
+listener2 <- read.csv("Results_KS.csv", header = TRUE, sep = ";")
+#renaming the two answers, removing column "Num"
+SLP1 <- listener1 %>%
+  rename(Roughness = Answer1, Breathiness = Answer2)%>%
+  select(-Num)
+
+SLP2 <- listener2 %>%
+  rename(Roughness = Answer1, Breathiness = Answer2)%>%
+  select(-Num)
+
+#inserting a column with Speaker and T merged together in the listening experiment results table
+SLP1$dummy <- paste(SLP1$Speaker, "-", SLP1$T)
+SLP2$dummy <- paste(SLP2$Speaker, "-", SLP2$T)
+
+#join the two listening results tables by matching both Speaker and T
+SLP <-full_join(SLP1,SLP2, by = "dummy") %>% 
+  select(-T.x, -Speaker.y, -Z.x, -Z.y, -T.y, -Speaker.x, -A.x, -A.y)
+
+#checking structure of the new table
+options(width = 120)
+head(SLP)
+
+SLP$RoughMean <- rowMeans(SLP[,c('Roughness.x', 'Roughness.y')], na.rm=TRUE)
+
+#creating new table removing Roughness ratings by separate SLPs, 
+#to avoid unwanted predictors, also removing Breathiness for the same reason
+SLPRough <- SLP %>% 
+  select(-Roughness.x, -Roughness.y, -Breathiness.x, -Breathiness.y)
+
+#saving this csv
+write.csv(SLPRough, file = "SLPRough.csv")
+#checking structure
+head(SLPRough)
+#-----------------------------------------
+#same for Breathiness
+SLP$BreathyMean <- rowMeans(SLP[,c('Breathiness.x', 'Breathiness.y')], na.rm=TRUE)
+SLPBreathy <- SLP %>% 
+  select(-Roughness.x, -Roughness.y, -Breathiness.x, -Breathiness.y, -RoughMean)
+#checking structure
+head(SLPBreathy)
+#saving this csv
+write.csv(SLPBreathy, file = "SLPBreathy.csv")
+```
+
+Merging mean roughness with AVQI table:
+```{r}
+AVQI <- read.csv("AVQI_results_new.csv")
+#create a dummy column as an identifier for each "Speaker-T" entry
+AVQI$dummy <- paste(AVQI$Speaker, "-", AVQI$T)
+
+#merging ("left-join" only appends AVQI entries that has SLP rating correspondents)
+library(dplyr)
+AVQI_R <-left_join(SLPRough,AVQI, by = "dummy")%>%
+  select(-Subject.y, -Subject.x, -Speaker, -dummy, -T, -AVQI) #removing all unwanted predictors
+
+#checking structure
+head(AVQI_R)
+```
+### Jitter is a factor!!
+```{r}
+AVQI_R$Jitter <- as.numeric(levels(AVQI_R$Jitter))[AVQI_R$Jitter]
+#have a look at the whole table
+AVQI_R
+```
+
+Merging mean Breathiness with AVQI table:
+```{r}
+#merging ("left-join" only appends AVQI entries that has SLP rating correspondents)
+library(dplyr)
+AVQI_B <-left_join(SLPBreathy,AVQI, by = "dummy")%>%
+  select(-Subject.y, -Subject.x, -Speaker, -dummy, -T, -AVQI) #removing all unwanted predictors
+  
+#checking structure
+head(AVQI_B)
+```
+
+Turning Jitter into a numeric variable:
+```{r}
+AVQI_B$Jitter <- as.numeric(levels(AVQI_B$Jitter))[AVQI_B$Jitter]
+```
+
+
+## The Roughness Tree
+
+
+Partitioning:
+```{r}
+#setting seed for reproducibility
+set.seed(1432)
+
+#deviding the data into three parts
+
+#setting proportions, 70% for training, devide the remainder into two halves
+assignment <- sample(1:3, size = nrow(AVQI_R), prob = c(0.7, 0.15, 0.15), replace = TRUE)
+
+#subsetting the data to training indices
+roughness_train <- AVQI_R[assignment == 1, ]
+
+#subsetting the data to validation indices
+roughness_valid <- AVQI_R[assignment == 2, ]
+
+#subsetting the data to test indices
+roughness_test <- AVQI_R[assignment == 3, ]
+```
+
+Training the model:
+```{r}
+#the model
+library(rpart)
+roughness_model <- rpart(formula = RoughMean ~.,
+                         data = roughness_train,
+                         method = "anova")
+```
+
+```{r}
+roughness_model
+```
+
+```{r}
+library(rpart.plot)
+rpart.plot(x = roughness_model, yesno = 2, type = 0, extra = 0)
+```
+
+Evaluating the model:
+```{r}
+#generating preedictions on the test set
+pred <- predict(object = roughness_model,
+                newdata = roughness_test)
+
+#computing the RMSE
+library(Metrics)
+rmse(actual = roughness_test$RoughMean,
+     predicted = pred)
+```
+
+Tuning the model:
+```{r}
+#plot the Complexity Parameter table
+plotcp(roughness_model)
+
+#print the "CP Table"
+print(roughness_model$cptable)
+
+#retreaving the optimal cp value based on cross-validation error
+opt_index <- which.min(roughness_model$cptable[, "xerror"])
+cp_opt <- roughness_model$cptable[opt_index, "CP"]
+
+#prune the tree to optimazed cp value
+roughness_model_opt <- prune(tree = roughness_model, cp = cp_opt)
+
+#plot the optimized model
+rpart.plot(x = roughness_model_opt, yesno = 2, type = 0, extra = 0)
+```
+
+
+Grid search:
+
+Creating the grid:
+```{r}
+#establishing a list of possible values for minsplit and maxdepth
+splits <- seq(1, 4, 1)
+depths <- seq(1, 6, 1)
+
+#creating a data frame containing all combinations
+hyper_grid <- expand.grid(minsplit = splits, maxdepth = depths)
+
+#checking out the grid
+head(hyper_grid)
+
+#printing the number of grid combinations
+nrow(hyper_grid)
+
+#number of potential models in the grid
+num_models <- nrow(hyper_grid)
+
+#creating an empty list to store models
+roughness_models <- list()
+
+#a for loop to loop over the rows of hyper_grid to train the grid of models
+
+for (i in 1:num_models) {
+  #getting minsplit, maxdepth values at row i
+  minsplit <- hyper_grid$minsplit[i]
+  maxdepth <- hyper_grid$maxdepth[i]
+  
+  #training a model and storing it in the list
+  roughness_models[[i]] <- rpart(formula = RoughMean ~ .,
+                             data = roughness_valid,
+                             method = "anova",
+                             minsplit = minsplit,
+                             maxdepth = maxdepth)
+}
+```
+
+Evaluating the grid:
+```{r}
+
+```
+
+
+... 
+
+## The Breathiness Tree:
+Partitioning:
+```{r}
+#setting seed for reproducibility
+set.seed(1658)
+
+#deviding the data into three parts
+
+#setting proportions, 70% for training, devide the remainder into two halves
+assignment <- sample(1:3, size = nrow(AVQI_B), prob = c(0.7, 0.15, 0.15), replace = TRUE)
+
+#subsetting the data to training indices
+breathiness_train <- AVQI_B[assignment == 1, ]
+
+#subsetting the data to validation indices
+breathiness_valid <- AVQI_B[assignment == 2, ]
+
+#subsetting the data to test indices
+breathiness_test <- AVQI_B[assignment == 3, ]
+```
+
+Training the model:
+```{r}
+#the model
+library(rpart)
+breathiness_model <- rpart(formula = BreathyMean ~.,
+                         data = breathiness_train,
+                         method = "anova")
+```
+
+```{r}
+breathiness_model
+```
+
+```{r}
+library(rpart.plot)
+rpart.plot(x = breathiness_model, yesno = 2, type = 0, extra = 0)
+```
+
+Evaluating the model:
+```{r}
+#generating preedictions on the test set
+pred <- predict(object = breathiness_model,
+                newdata = breathiness_test)
+
+#computing the RMSE
+library(Metrics)
+rmse(actual = breathiness_test$BreathyMean,
+     predicted = pred)
+```
+
+Tuning the model:
+```{r}
+#plot the Complexity Parameter table
+plotcp(breathiness_model)
+
+#print the "CP Table"
+print(breathiness_model$cptable)
+
+#retreaving the optimal cp value based on cross-validation error
+opt_index <- which.min(breathiness_model$cptable[, "xerror"])
+cp_opt <- breathiness_model$cptable[opt_index, "CP"]
+
+#prune the tree to optimazed cp value
+breathiness_model_opt <- prune(tree = breathiness_model, cp = cp_opt)
+
+#plot the optimized model
+rpart.plot(x = breathiness_model_opt, yesno = 2, type = 0, extra = 0)
+```
+
+Grid search:
+
+...
