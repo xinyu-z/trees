@@ -102,7 +102,7 @@ AVQI_B$Jitter <- as.numeric(levels(AVQI_B$Jitter))[AVQI_B$Jitter]
 Partitioning:
 ```{r}
 #setting seed for reproducibility
-set.seed(1432)
+set.seed(1555)
 
 #deviding the data into three parts
 
@@ -171,11 +171,11 @@ rpart.plot(x = roughness_model_opt, yesno = 2, type = 0, extra = 0)
 
 Grid search:
 
-Creating the grid:
+Creating a grid of possible models:
 ```{r}
 #establishing a list of possible values for minsplit and maxdepth
-splits <- seq(1, 4, 1)
-depths <- seq(1, 6, 1)
+splits <- seq(1, 5, 1)
+depths <- seq(1, 5, 1)
 
 #creating a data frame containing all combinations
 hyper_grid <- expand.grid(minsplit = splits, maxdepth = depths)
@@ -210,9 +210,106 @@ for (i in 1:num_models) {
 
 Evaluating the grid:
 ```{r}
+#number of potential models in the grid
+num_models <- lengths(roughness_models)
+
+#creating an empty vector to store RMSE values
+rmse_values <- c()
+
+#a loop over the models to compute validation RMSE
+for (i in 1:num_models){
+  
+  #retrieving the i^th model from the list
+  model <- roughness_models[[i]]
+  
+  #generating predictions on roughness_valid
+  pred <- predict(object = model,
+                  newdata = roughness_valid)
+  
+  #computing validation RMSE and add to the vector
+  rmse_values[i] <- rmse(actual = roughness_valid$RoughMean,
+                         predicted = pred)
+}
+
+#idenetifying the model with smallest validation set RMSE
+best_model <- roughness_models[[which.min(rmse_values)]]
+
+#printing the parameters of the best model
+best_model$control
+
+#computing test set RMSE on best_model
+pred <- predict(object = best_model,
+                newdata = roughness_test)
+rmse(actual = roughness_test$RoughMean,
+     predicted = pred)
+```
+
+```{r}
+rpart.plot(best_model)
+```
+
+Training a bagged tree model:
+```{r}
+library(ipred)
+#setting seed for reproducibility
+set.seed(1557)
+
+#training a bagged model
+roughness_model_bag <- bagging(formula = RoughMean ~ .,
+                           data = roughness_train,
+                           coob = TRUE) #=using out-of-bag samples to estimate model accuracy
+
+#printing the model
+roughness_model_bag
 
 ```
 
+Assessing the bagged trees:
+```{r}
+#assess 10-25 bagged trees
+ntree <- 10:50
+
+#create empty vector to store out of bag RMSE values
+rmse <- vector(mode = "numeric", length = length(ntree))
+
+for (i in seq_along(ntree)) {
+  #set seed for reproducibility
+  set.seed(1720)
+  
+  #perform bagged model
+  model <- bagging(
+    formula = RoughMean ~ .,
+    data = roughness_train,
+    coob = TRUE,
+    nbagg = ntree[i]
+  )
+  #get out of bag error
+  rmse[i] <- model$err
+}
+
+plot(ntree, rmse, type = 'l', lwd = 2)
+abline(v = 22, col = "blue", lty = "dashed")
+```
+^the lowest rmse appeared when the number of trees is 22.
+
+Bagging with Caret:
+```{r}
+library(caret)
+#specify a 10-fold cross validation
+ctrl <- trainControl(method = "cv", number = 10)
+
+#cross-validation bagged model
+bagged_cv <- train(
+  RoughMean ~ .,
+  data = roughness_train,
+  method = "treebag",
+  trControl = ctrl,
+  importance = TRUE,
+  na.action = na.pass #ignore N/A's
+)
+
+plot(varImp(bagged_cv), 10)
+```
 
 ... 
 
