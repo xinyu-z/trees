@@ -102,7 +102,7 @@ AVQI_B$Jitter <- as.numeric(levels(AVQI_B$Jitter))[AVQI_B$Jitter]
 Partitioning:
 ```{r}
 #setting seed for reproducibility
-set.seed(1555)
+set.seed(1606)
 
 #deviding the data into three parts
 
@@ -288,9 +288,9 @@ for (i in seq_along(ntree)) {
 }
 
 plot(ntree, rmse, type = 'l', lwd = 2)
-abline(v = 22, col = "blue", lty = "dashed")
+abline(v = 31, col = "blue", lty = "dashed")
 ```
-^the lowest rmse appeared when the number of trees is 22.
+^the lowest rmse appeared when the number of trees is 31.
 
 Bagging with Caret:
 ```{r}
