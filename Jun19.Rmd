@@ -95,6 +95,16 @@ Turning Jitter into a numeric variable:
 AVQI_B$Jitter <- as.numeric(levels(AVQI_B$Jitter))[AVQI_B$Jitter]
 ```
 
+```{r}
+merged <- read.csv("merged.csv")
+library(ggplot2)
+ggplot(data = merged, aes(x = Roughness, y = Breathiness)) + geom_point(aes(color = Subject))
+
+ggsave("roughness-breathiness.pdf", plot = last_plot(), device = NULL)
+```
+
+
+
 
 ## The Roughness Tree
 
@@ -304,11 +314,12 @@ bagged_cv <- train(
   data = roughness_train,
   method = "treebag",
   trControl = ctrl,
+  mtry = 13,
   importance = TRUE,
   na.action = na.pass #ignore N/A's
 )
 
-plot(varImp(bagged_cv), 10)
+plot(varImp(bagged_cv), 8)
 ```
 
 ... 
@@ -459,4 +470,87 @@ rmse(actual = breathiness_test$BreathyMean,
 rpart.plot(best_model)
 ```
 
+Training a bagged tree model:
+```{r}
+library(ipred)
+#setting seed for reproducibility
+set.seed(1544)
+
+#training a bagged model
+breathiness_model_bag <- bagging(formula = BreathyMean ~ .,
+                           data = breathiness_train,
+                           coob = TRUE) #=using out-of-bag samples to estimate model accuracy
+
+#printing the model
+breathiness_model_bag
+
+```
+Assessing the bagged trees:
+```{r}
+#assess 10-50 bagged trees
+ntree <- 10:60
+
+#create empty vector to store out of bag RMSE values
+rmse <- vector(mode = "numeric", length = length(ntree))
+
+for (i in seq_along(ntree)) {
+  #set seed for reproducibility
+  set.seed(1546)
+  
+  #perform bagged model
+  model <- bagging(
+    formula = BreathyMean ~ .,
+    data = breathiness_train,
+    coob = TRUE,
+    nbagg = ntree[i]
+  )
+  #get out of bag error
+  rmse[i] <- model$err
+}
+
+plot(ntree, rmse, type = 'l', lwd = 2)
+abline(v = 13, col = "blue", lty = "dashed")
+```
+^the lowest rmse appeared when the number of trees is 13.
+
+Bagging with Caret:
+```{r}
+library(caret)
+#specify a 10-fold cross validation
+ctrl <- trainControl(method = "cv", number = 10)
+
+#cross-validation bagged model
+bagged_cv <- train(
+  BreathyMean ~ .,
+  data = breathiness_train,
+  method = "treebag",
+  trControl = ctrl,
+  mtry = 13, #according to the last code chunk
+  importance = TRUE,
+  na.action = na.pass #ignore N/A's
+)
+
+plot(varImp(bagged_cv), 10)
+```
+
+
+```{r}
+AVQI_RID <-left_join(SLPRough,AVQI, by = "dummy")%>%
+  select(-Subject.y, -Subject.x, -Speaker, -T, -AVQI)
+library(lme4)
+roughlmer <- lmer(RoughMean ~ CPPS + Tilt + Slope +(1|dummy), data = AVQI_RID)
+
+summary(roughlmer)
+```
+
+```{r}
+AVQI_BID <-left_join(SLPBreathy,AVQI, by = "dummy")%>%
+  select(-Subject.y, -Subject.x, -Speaker, -T, -AVQI)
+library(lme4)
+breathylmer <- lmer(BreathyMean ~ CPPS + Tilt + Slope +(1|dummy), data = AVQI_BID)
+
+summary(breathylmer)
+```
+
+CPPS is the only significant variable, and it correlates with both roughness and breathiness. 
 ...
