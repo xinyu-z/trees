@@ -1,0 +1,184 @@
+---
+title: "Jun23"
+author: "Xinyu Zhang"
+date: "6/23/2020"
+output: html_document
+---
+```{r}
+#merging mean breahtiness and mean roughness into one table
+AVQI_BR <-left_join(AVQI_B,AVQI_R, by = "dummy") %>% 
+  glimpse
+#plotting and fitting regression line
+ggplot(data = AVQI_BR, aes(x = RoughMean, y = BreathyMean)) + 
+  geom_point() +
+  geom_smooth(method = "lm")
+```
+
+```{r}
+#Comparing the above with the un-averaged data
+merged <- read.csv("merged.csv")
+library(ggplot2)
+ggplot(data = merged, aes(x = Roughness, y = Breathiness, color = Subject)) + 
+  geom_point() +
+  geom_smooth(method = "lm")
+
+#ggsave("roughness-breathiness.pdf", plot = last_plot(), device = NULL)
+```
+
+```{r}
+#Only fitting one line over all points, regardless of subjects
+merged <- read.csv("merged.csv")
+library(ggplot2)
+ggplot(data = merged, aes(x = Roughness, y = Breathiness)) + 
+  geom_point(aes(color = Subject)) +
+  geom_smooth(method = "lm")
+
+#ggsave("roughness-breathiness.pdf", plot = last_plot(), device = NULL)
+```
+
+```{r}
+#excluding the upper-right-most and lower-left-most squares
+merged2 <- merged %>% 
+  filter(!(Roughness > 750 & Breathiness > 750) & !(Roughness < 250 & Breathiness <250)) %>%
+  glimpse
+
+ggplot(data = merged2, aes(x = Roughness, y = Breathiness, color = Subject))+
+         geom_point()+
+         geom_smooth(method = "lm")
+```
+
+```{r}
+library(dplyr)
+#reading in listening test results
+listener1 <- read.csv("Results_AK.csv", header = TRUE, sep = ";")
+listener2 <- read.csv("Results_KS.csv", header = TRUE, sep = ";")
+#renaming the two answers, removing column "Num"
+SLP1 <- listener1 %>%
+  rename(Roughness = Answer1, Breathiness = Answer2)%>%
+  select(-Num)
+
+SLP2 <- listener2 %>%
+  rename(Roughness = Answer1, Breathiness = Answer2)%>%
+  select(-Num)
+
+#inserting a column with Speaker and T merged together in the listening experiment results table
+#SLP1$dummy <- paste(SLP1$Speaker, "-", SLP1$T)
+#SLP2$dummy <- paste(SLP2$Speaker, "-", SLP2$T)
+
+#as_tibble(SLP1)
+#as_tibble(SLP2)
+
+#join the two listening results tables by matching both Speaker and T
+SLP <-rbind(SLP1,SLP2) %>% 
+  select(-Z, -A) %>% 
+  filter(!(Roughness > 750 & Breathiness > 750) & !(Roughness < 250 & Breathiness <250))
+
+SLP$dummy <- paste(SLP$Speaker, "-", SLP$T)
+
+str(SLP)
+```
+
+```{r}
+AVQI <- read.csv("AVQI_results_new.csv")
+#create a dummy column as an identifier for each "Speaker-T" entry
+AVQI$dummy <- paste(AVQI$Speaker, "-", AVQI$T)
+
+SLPRough <- SLP %>% 
+  select(Roughness, dummy)
+
+#merging ("left-join" only appends AVQI entries that has SLP rating correspondents)
+library(dplyr)
+AVQI_R <-left_join(SLPRough,AVQI, by = "dummy")%>%
+  select(-Speaker, -T, -AVQI, -dummy)
+
+#converting jitter into a factor
+AVQI_R$Jitter <- as.numeric(levels(AVQI_R$Jitter))[AVQI_R$Jitter]
+
+#have a look at the whole table
+AVQI_R
+```
+
+```{r}
+SLPBreathy <- SLP %>% 
+  select(Breathiness, dummy)
+
+#merging ("left-join" only appends AVQI entries that has SLP rating correspondents)
+library(dplyr)
+AVQI_B <-left_join(SLPBreathy,AVQI, by = "dummy")%>%
+  select(-Speaker, -T, -AVQI, -dummy)
+
+#converting jitter into a factor
+AVQI_B$Jitter <- as.numeric(levels(AVQI_B$Jitter))[AVQI_B$Jitter]
+
+AVQI_B
+```
+
+##Re-training the roughness tree
+
+Partitioning:
+```{r}
+#setting seed for reproducibility
+set.seed(1606)
+
+#deviding the data into three parts
+
+#setting proportions, 70% for training, devide the remainder into two halves
+assignment <- sample(1:3, size = nrow(AVQI_R), prob = c(0.7, 0.15, 0.15), replace = TRUE)
+
+#subsetting the data to training indices
+roughness_train <- AVQI_R[assignment == 1, ]
+
+#subsetting the data to validation indices
+roughness_valid <- AVQI_R[assignment == 2, ]
+
+#subsetting the data to test indices
+roughness_test <- AVQI_R[assignment == 3, ]
+```
+
+Training the model:
+```{r}
+#the model
+library(rpart)
+roughness_model <- rpart(formula = Roughness ~.,
+                         data = roughness_train,
+                         method = "anova")
+
+roughness_model
+```
+
+Plotting the tree:
+```{r}
+library(rpart.plot)
+rpart.plot(x = roughness_model, yesno = 2, type = 0, extra = 0)
+```
+
+Evaluating the model:
+```{r}
+#generating preedictions on the test set
+pred <- predict(object = roughness_model,
+                newdata = roughness_test)
+
+#computing the RMSE
+library(Metrics)
+rmse(actual = roughness_test$Roughness,
+     predicted = pred)
+```
+
+Tuning the model:
+```{r}
+#plot the Complexity Parameter table
+plotcp(roughness_model)
+
+#print the "CP Table"
+print(roughness_model$cptable)
+
+#retreaving the optimal cp value based on cross-validation error
+opt_index <- which.min(roughness_model$cptable[, "xerror"])
+cp_opt <- roughness_model$cptable[opt_index, "CP"]
+
+#prune the tree to optimazed cp value
+roughness_model_opt <- prune(tree = roughness_model, cp = cp_opt)
+
+#plot the optimized model
+rpart.plot(x = roughness_model_opt, yesno = 2, type = 0, extra = 0)
+```

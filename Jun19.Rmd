@@ -67,7 +67,7 @@ AVQI$dummy <- paste(AVQI$Speaker, "-", AVQI$T)
 #merging ("left-join" only appends AVQI entries that has SLP rating correspondents)
 library(dplyr)
 AVQI_R <-left_join(SLPRough,AVQI, by = "dummy")%>%
-  select(-Subject.y, -Subject.x, -Speaker, -dummy, -T, -AVQI) #removing all unwanted predictors
+  select(-Subject.y, -Subject.x, -Speaker, -T, -AVQI) #removing all unwanted predictors
 
 #checking structure
 head(AVQI_R)
@@ -84,7 +84,7 @@ Merging mean Breathiness with AVQI table:
 #merging ("left-join" only appends AVQI entries that has SLP rating correspondents)
 library(dplyr)
 AVQI_B <-left_join(SLPBreathy,AVQI, by = "dummy")%>%
-  select(-Subject.y, -Subject.x, -Speaker, -dummy, -T, -AVQI) #removing all unwanted predictors
+  select(-Subject.y, -Subject.x, -Speaker, -T, -AVQI) #removing all unwanted predictors
   
 #checking structure
 head(AVQI_B)
@@ -98,9 +98,10 @@ AVQI_B$Jitter <- as.numeric(levels(AVQI_B$Jitter))[AVQI_B$Jitter]
 ```{r}
 merged <- read.csv("merged.csv")
 library(ggplot2)
-ggplot(data = merged, aes(x = Roughness, y = Breathiness)) + geom_point(aes(color = Subject))
+ggplot(data = merged, aes(x = Roughness, y = Breathiness, color = Subject)) + 
+  geom_point()
 
-ggsave("roughness-breathiness.pdf", plot = last_plot(), device = NULL)
+#ggsave("roughness-breathiness.pdf", plot = last_plot(), device = NULL)
 ```
 
 
