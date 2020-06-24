@@ -1,0 +1,177 @@
+---
+title: "model_comparison"
+author: "Xinyu Zhang"
+date: "6/24/2020"
+output: html_document
+---
+loading data, and fitting a regression line on the scatterplot, treating ratings by different SLPs as separate entries
+```{r}
+merged <- read.csv("merged.csv")
+#scatter plot
+library(ggplot2)
+ggplot(data = merged, aes(x = Roughness, y = Breathiness)) + 
+  geom_point(aes(color = Subject)) +
+  geom_smooth(method = "lm")
+```
+Comparing the above with averaged roughness and breathiness scores:
+```{r}
+#plotting and fitting regression line
+AVQI_B <- read.csv("AVQI_B.csv")
+AVQI_R <- read.csv("AVQI_R.csv")
+AVQI_BR <-left_join(AVQI_B,AVQI_R, by = "dummy")
+ggplot(data = AVQI_BR, aes(x = RoughMean, y = BreathyMean)) + 
+  geom_point() +
+  geom_smooth(method = "lm")
+```
+
+
+
+```{r}
+#excluding the upper-right-most and lower-left-most squares, unaveraged
+merged <- read.csv("merged.csv")
+merged2 <- merged %>% 
+  filter(!(Roughness > 750 & Breathiness > 750) & !(Roughness < 250 & Breathiness <250))
+
+#new scatter plot
+ggplot(data = merged2, aes(x = Roughness, y = Breathiness)) +
+         geom_point(aes(color = Subject)) +
+         geom_smooth(method = "lm")
+```
+^not much correlation between Roughness and Breathiness here anymore.
+
+To reshape the tables and select the needed data points (excluding the two extreme corners):
+```{r}
+library(dplyr)
+#reading in listening test results
+listener1 <- read.csv("Results_AK.csv", header = TRUE, sep = ";")
+listener2 <- read.csv("Results_KS.csv", header = TRUE, sep = ";")
+#renaming the two answers, removing column "Num"
+SLP1 <- listener1 %>%
+  rename(Roughness = Answer1, Breathiness = Answer2)%>%
+  dplyr::select(-Num)
+
+SLP2 <- listener2 %>%
+  rename(Roughness = Answer1, Breathiness = Answer2)%>%
+  dplyr::select(-Num)
+
+#join the two listening results tables by matching both Speaker and T
+SLP <-rbind(SLP1,SLP2) %>% 
+  dplyr::select(-Z, -A) %>% #filterting out the extreme corners
+  filter(!(Roughness > 750 & Breathiness > 750) & !(Roughness < 250 & Breathiness <250))
+
+SLP$dummy <- paste(SLP$Speaker, "-", SLP$T)
+
+glimpse(SLP)
+```
+No need to single out brethiness and roughness for the principal component analysis. Merging the two subjective scores with the AVQI table:
+```{r}
+library(dplyr)
+AVQI <- read.csv("AVQI_results_new.csv")
+#create a dummy column as an identifier for each "Speaker-T" entry
+AVQI$dummy <- paste(AVQI$Speaker, "-", AVQI$T)
+
+SLP_RB <- SLP %>% 
+  dplyr::select(Roughness, Breathiness, dummy) #no need to select T and Speaker since they are combined as the identifier column "dummy", and not need to select "Subject" if we want to treat them as separate entries
+
+#merging ("left-join" only appends AVQI entries that has SLP rating correspondents)
+library(dplyr)
+AVQI_R <-left_join(SLP_RB,AVQI, by = "dummy")%>%
+  dplyr::select(-Breathiness, -Speaker, -T, -AVQI, -Version, -dummy) #AVQI version is not relavant here
+
+AVQI_B <-left_join(SLP_RB,AVQI, by = "dummy")%>%
+  dplyr::select(-Roughness, -Speaker, -T, -AVQI, -Version, -dummy)
+
+#converting jitter into a numeric variable
+AVQI_R$Jitter <- as.numeric(levels(AVQI_R$Jitter))[AVQI_R$Jitter]
+
+AVQI_B$Jitter <- as.numeric(levels(AVQI_B$Jitter))[AVQI_B$Jitter]
+
+
+#removing rows with NA values
+selectedR <- AVQI_R[complete.cases(AVQI_R), ]
+selectedB <- AVQI_B[complete.cases(AVQI_B), ]
+
+selectedR
+```
+
+Stepwise model comparison for roughness:
+```{r}
+library(tidyverse)
+library(caret)
+library(leaps)
+library(MASS)
+
+min.model <- lm(Roughness ~., data = selectedR, na.action = "na.omit")
+step.model<- stepAIC(min.model, direction = "both", 
+                      trace = FALSE)
+summary(step.model)
+```
+The best model has one variable: HNR
+
+Alternative model selection
+```{r}
+models <- regsubsets(Roughness~., data = selectedR, nvmax = 7,
+                     method = "seqrep") #7 because 7 variables in total
+
+# Set seed for reproducibility
+set.seed(1802)
+# Set up repeated k-fold cross-validation
+train.control <- trainControl(method = "cv", number = 10)
+# Train the model
+step.model <- train(Roughness ~., data = selectedR,
+                    method = "leapBackward", 
+                    tuneGrid = data.frame(nvmax = 1:7),
+                    trControl = train.control
+                    )
+step.model$results
+step.model$bestTune
+summary(step.model$finalModel)
+```
+Same result. The best model contains one variable: HNR
+
+Calculating the coefficients in the best model:
+```{r}
+#coefficients of the best model
+coef(step.model$finalModel, 1)
+```
+
+Stepwise model comparison for Breathiness:
+```{r}
+min.model <- lm(Breathiness ~., data = selectedB, na.action = "na.omit")
+step.model<- stepAIC(min.model, direction = "both", 
+                      trace = FALSE)
+summary(step.model)
+```
+Alternative:
+```{r}
+models <- regsubsets(Breathiness~., data = selectedB, nvmax = 7,
+                     method = "seqrep") #7 because there are 7 variables in total
+
+# Set seed for reproducibility
+set.seed(1803)
+# Set up repeated k-fold cross-validation
+train.control <- trainControl(method = "cv", number = 10)
+# Train the model
+step.model <- train(Breathiness ~., data = selectedB,
+                    method = "leapBackward", 
+                    tuneGrid = data.frame(nvmax = 1:7),
+                    trControl = train.control
+                    )
+step.model$results
+step.model$bestTune
+summary(step.model$finalModel)
+```
+The RMSE is lowest when there are 2 variables: CPPS and HNR
+Calculating the coefficients in the best model
+```{r}
+#coefficients of the best model
+coef(step.model$finalModel, 2)
+```
+
+Running the principal component analysis:
+```{r}
+#remember to remove roughness here
+pca_rough <- prcomp(selectedR[2:8], scale = TRUE) #removing the second column i.e. Breathiness and scale the variables (e.g. roughness is on a wider scale than all the rest of the measurements)
+pca_rough
+```
+PCA does not make sense since we don't know what categories are the principal components dividing the data into.
