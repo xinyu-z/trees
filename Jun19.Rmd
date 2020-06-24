@@ -64,38 +64,38 @@ AVQI$dummy <- paste(AVQI$Speaker, "-", AVQI$T)
 
 #merging ("left-join" only appends AVQI entries that has SLP rating correspondents)
 library(dplyr)
-AVQI_R <-left_join(SLPRough,AVQI, by = "dummy")%>%
+av_AVQI_R <-left_join(SLPRough,AVQI, by = "dummy")%>%
   dplyr::select(-Subject.y, -Subject.x, -Speaker, -T, -AVQI) #removing all unwanted predictors
 
 #checking structure
-head(AVQI_R)
+head(av_AVQI_R)
 ```
 
 ### Jitter is a factor!!
 ```{r}
-AVQI_R$Jitter <- as.numeric(levels(AVQI_R$Jitter))[AVQI_R$Jitter]
+av_AVQI_R$Jitter <- as.numeric(levels(av_AVQI_R$Jitter))[av_AVQI_R$Jitter]
 #have a look at the whole table
-AVQI_R
+av_AVQI_R
 #saving AVQI_R
-write.csv(AVQI_R, file = "AVQI_R.csv")
+write.csv(av_AVQI_R, file = "av_AVQI_R.csv")
 ```
 
 Merging mean Breathiness with AVQI table:
 ```{r}
 #merging ("left-join" only appends AVQI entries that has SLP rating correspondents)
 library(dplyr)
-AVQI_B <-left_join(SLPBreathy,AVQI, by = "dummy")%>%
+av_AVQI_B <-left_join(SLPBreathy,AVQI, by = "dummy")%>%
   dplyr::select(-Subject.y, -Subject.x, -Speaker, -T, -AVQI) #removing all unwanted predictors
   
 #checking structure
-head(AVQI_B)
+head(av_AVQI_B)
 ```
 
 Turning Jitter into a numeric variable:
 ```{r}
-AVQI_B$Jitter <- as.numeric(levels(AVQI_B$Jitter))[AVQI_B$Jitter]
+av_AVQI_B$Jitter <- as.numeric(levels(av_AVQI_B$Jitter))[av_AVQI_B$Jitter]
 #saving this csv
-write.csv(AVQI_B, file = "AVQI_B.csv")
+write.csv(av_AVQI_B, file = "av_AVQI_B.csv")
 ```
 
 ```{r}
@@ -120,17 +120,19 @@ set.seed(1606)
 
 #deviding the data into three parts
 
+av_AVQI_R <- av_AVQI_R %>% dplyr::select(-dummy)
+
 #setting proportions, 70% for training, devide the remainder into two halves
-assignment <- sample(1:3, size = nrow(AVQI_R), prob = c(0.7, 0.15, 0.15), replace = TRUE)
+assignment <- sample(1:3, size = nrow(av_AVQI_R), prob = c(0.7, 0.15, 0.15), replace = TRUE)
 
 #subsetting the data to training indices
-roughness_train <- AVQI_R[assignment == 1, ]
+roughness_train <- av_AVQI_R[assignment == 1, ]
 
 #subsetting the data to validation indices
-roughness_valid <- AVQI_R[assignment == 2, ]
+roughness_valid <- av_AVQI_R[assignment == 2, ]
 
 #subsetting the data to test indices
-roughness_test <- AVQI_R[assignment == 3, ]
+roughness_test <- av_AVQI_R[assignment == 3, ]
 ```
 
 Training the model:
@@ -331,22 +333,24 @@ plot(varImp(bagged_cv), 8)
 ## The Breathiness Tree:
 Partitioning:
 ```{r}
+av_AVQI_B <- av_AVQI_B %>% dplyr::select(-dummy)
+
 #setting seed for reproducibility
 set.seed(1658)
 
 #deviding the data into three parts
 
 #setting proportions, 70% for training, devide the remainder into two halves
-assignment <- sample(1:3, size = nrow(AVQI_B), prob = c(0.7, 0.15, 0.15), replace = TRUE)
+assignment <- sample(1:3, size = nrow(av_AVQI_B), prob = c(0.7, 0.15, 0.15), replace = TRUE)
 
 #subsetting the data to training indices
-breathiness_train <- AVQI_B[assignment == 1, ]
+breathiness_train <- av_AVQI_B[assignment == 1, ]
 
 #subsetting the data to validation indices
-breathiness_valid <- AVQI_B[assignment == 2, ]
+breathiness_valid <- av_AVQI_B[assignment == 2, ]
 
 #subsetting the data to test indices
-breathiness_test <- AVQI_B[assignment == 3, ]
+breathiness_test <- av_AVQI_B[assignment == 3, ]
 ```
 
 Training the model:
