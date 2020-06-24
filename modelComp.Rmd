@@ -13,17 +13,18 @@ ggplot(data = merged, aes(x = Roughness, y = Breathiness)) +
   geom_point(aes(color = Subject)) +
   geom_smooth(method = "lm")
 ```
+
 Comparing the above with averaged roughness and breathiness scores:
 ```{r}
+library(dplyr)
 #plotting and fitting regression line
-AVQI_B <- read.csv("AVQI_B.csv")
-AVQI_R <- read.csv("AVQI_R.csv")
-AVQI_BR <-left_join(AVQI_B,AVQI_R, by = "dummy")
-ggplot(data = AVQI_BR, aes(x = RoughMean, y = BreathyMean)) + 
+av_AVQI_B <- read.csv("av_AVQI_B.csv")
+av_AVQI_R <- read.csv("av_AVQI_R.csv")
+av_AVQI_BR <-left_join(av_AVQI_B,av_AVQI_R, by = "dummy")
+ggplot(data = av_AVQI_BR, aes(x = RoughMean, y = BreathyMean)) + 
   geom_point() +
   geom_smooth(method = "lm")
 ```
-
 
 
 ```{r}
@@ -37,6 +38,7 @@ ggplot(data = merged2, aes(x = Roughness, y = Breathiness)) +
          geom_point(aes(color = Subject)) +
          geom_smooth(method = "lm")
 ```
+
 ^not much correlation between Roughness and Breathiness here anymore.
 
 To reshape the tables and select the needed data points (excluding the two extreme corners):
@@ -63,7 +65,8 @@ SLP$dummy <- paste(SLP$Speaker, "-", SLP$T)
 
 glimpse(SLP)
 ```
-No need to single out brethiness and roughness for the principal component analysis. Merging the two subjective scores with the AVQI table:
+
+Merging the two subjective scores with the AVQI table:
 ```{r}
 library(dplyr)
 AVQI <- read.csv("AVQI_results_new.csv")
@@ -90,8 +93,6 @@ AVQI_B$Jitter <- as.numeric(levels(AVQI_B$Jitter))[AVQI_B$Jitter]
 #removing rows with NA values
 selectedR <- AVQI_R[complete.cases(AVQI_R), ]
 selectedB <- AVQI_B[complete.cases(AVQI_B), ]
-
-selectedR
 ```
 
 Stepwise model comparison for roughness:
@@ -106,9 +107,10 @@ step.model<- stepAIC(min.model, direction = "both",
                       trace = FALSE)
 summary(step.model)
 ```
-The best model has one variable: HNR
 
-Alternative model selection
+The best roughness model has one variable: HNR
+
+Alternative model selection:
 ```{r}
 models <- regsubsets(Roughness~., data = selectedR, nvmax = 7,
                      method = "seqrep") #7 because 7 variables in total
@@ -124,10 +126,12 @@ step.model <- train(Roughness ~., data = selectedR,
                     trControl = train.control
                     )
 step.model$results
+#lowest RMSE occurs when there is 1 predictor:
 step.model$bestTune
 summary(step.model$finalModel)
 ```
-Same result. The best model contains one variable: HNR
+
+Same result. The best roughness model contains one variable: HNR
 
 Calculating the coefficients in the best model:
 ```{r}
@@ -142,7 +146,10 @@ step.model<- stepAIC(min.model, direction = "both",
                       trace = FALSE)
 summary(step.model)
 ```
-Alternative:
+
+The best breathiness model contains five variables: CPPS, HNR, Shimmer, ShdB, Slope 
+
+Model selection with alternative method:
 ```{r}
 models <- regsubsets(Breathiness~., data = selectedB, nvmax = 7,
                      method = "seqrep") #7 because there are 7 variables in total
@@ -161,8 +168,10 @@ step.model$results
 step.model$bestTune
 summary(step.model$finalModel)
 ```
+
 The RMSE is lowest when there are 2 variables: CPPS and HNR
-Calculating the coefficients in the best model
+
+Calculating the coefficients in the best model:
 ```{r}
 #coefficients of the best model
 coef(step.model$finalModel, 2)
@@ -174,4 +183,5 @@ Running the principal component analysis:
 pca_rough <- prcomp(selectedR[2:8], scale = TRUE) #removing the second column i.e. Breathiness and scale the variables (e.g. roughness is on a wider scale than all the rest of the measurements)
 pca_rough
 ```
+
 PCA does not make sense since we don't know what categories are the principal components dividing the data into.
