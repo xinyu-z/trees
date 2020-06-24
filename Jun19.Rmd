@@ -18,11 +18,11 @@ listener2 <- read.csv("Results_KS.csv", header = TRUE, sep = ";")
 #renaming the two answers, removing column "Num"
 SLP1 <- listener1 %>%
   rename(Roughness = Answer1, Breathiness = Answer2)%>%
-  select(-Num)
+  dplyr::select(-Num)
 
 SLP2 <- listener2 %>%
   rename(Roughness = Answer1, Breathiness = Answer2)%>%
-  select(-Num)
+  dplyr::select(-Num)
 
 #inserting a column with Speaker and T merged together in the listening experiment results table
 SLP1$dummy <- paste(SLP1$Speaker, "-", SLP1$T)
@@ -30,7 +30,7 @@ SLP2$dummy <- paste(SLP2$Speaker, "-", SLP2$T)
 
 #join the two listening results tables by matching both Speaker and T
 SLP <-full_join(SLP1,SLP2, by = "dummy") %>% 
-  select(-T.x, -Speaker.y, -Z.x, -Z.y, -T.y, -Speaker.x, -A.x, -A.y)
+  dplyr::select(-T.x, -Speaker.y, -Z.x, -Z.y, -T.y, -Speaker.x, -A.x, -A.y)
 
 #checking structure of the new table
 options(width = 120)
@@ -41,7 +41,7 @@ SLP$RoughMean <- rowMeans(SLP[,c('Roughness.x', 'Roughness.y')], na.rm=TRUE)
 #creating new table removing Roughness ratings by separate SLPs, 
 #to avoid unwanted predictors, also removing Breathiness for the same reason
 SLPRough <- SLP %>% 
-  select(-Roughness.x, -Roughness.y, -Breathiness.x, -Breathiness.y)
+  dplyr::select(-Roughness.x, -Roughness.y, -Breathiness.x, -Breathiness.y)
 
 #saving this csv
 write.csv(SLPRough, file = "SLPRough.csv")
@@ -51,11 +51,9 @@ head(SLPRough)
 #same for Breathiness
 SLP$BreathyMean <- rowMeans(SLP[,c('Breathiness.x', 'Breathiness.y')], na.rm=TRUE)
 SLPBreathy <- SLP %>% 
-  select(-Roughness.x, -Roughness.y, -Breathiness.x, -Breathiness.y, -RoughMean)
+  dplyr::select(-Roughness.x, -Roughness.y, -Breathiness.x, -Breathiness.y, -RoughMean)
 #checking structure
 head(SLPBreathy)
-#saving this csv
-write.csv(SLPBreathy, file = "SLPBreathy.csv")
 ```
 
 Merging mean roughness with AVQI table:
@@ -67,16 +65,19 @@ AVQI$dummy <- paste(AVQI$Speaker, "-", AVQI$T)
 #merging ("left-join" only appends AVQI entries that has SLP rating correspondents)
 library(dplyr)
 AVQI_R <-left_join(SLPRough,AVQI, by = "dummy")%>%
-  select(-Subject.y, -Subject.x, -Speaker, -T, -AVQI) #removing all unwanted predictors
+  dplyr::select(-Subject.y, -Subject.x, -Speaker, -T, -AVQI) #removing all unwanted predictors
 
 #checking structure
 head(AVQI_R)
 ```
+
 ### Jitter is a factor!!
 ```{r}
 AVQI_R$Jitter <- as.numeric(levels(AVQI_R$Jitter))[AVQI_R$Jitter]
 #have a look at the whole table
 AVQI_R
+#saving AVQI_R
+write.csv(AVQI_R, file = "AVQI_R.csv")
 ```
 
 Merging mean Breathiness with AVQI table:
@@ -84,7 +85,7 @@ Merging mean Breathiness with AVQI table:
 #merging ("left-join" only appends AVQI entries that has SLP rating correspondents)
 library(dplyr)
 AVQI_B <-left_join(SLPBreathy,AVQI, by = "dummy")%>%
-  select(-Subject.y, -Subject.x, -Speaker, -T, -AVQI) #removing all unwanted predictors
+  dplyr::select(-Subject.y, -Subject.x, -Speaker, -T, -AVQI) #removing all unwanted predictors
   
 #checking structure
 head(AVQI_B)
@@ -93,6 +94,8 @@ head(AVQI_B)
 Turning Jitter into a numeric variable:
 ```{r}
 AVQI_B$Jitter <- as.numeric(levels(AVQI_B$Jitter))[AVQI_B$Jitter]
+#saving this csv
+write.csv(AVQI_B, file = "AVQI_B.csv")
 ```
 
 ```{r}
