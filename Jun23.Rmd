@@ -101,7 +101,7 @@ av_AVQI_R <-left_join(SLPRough,AVQI, by = "dummy")%>%
 av_AVQI_R$Jitter <- as.numeric(levels(av_AVQI_R$Jitter))[av_AVQI_R$Jitter]
 
 #have a look at the whole table
-av_AVQI_R
+#av_AVQI_R
 ```
 
 ```{r}
@@ -116,7 +116,7 @@ av_AVQI_B <-left_join(SLPBreathy,AVQI, by = "dummy")%>%
 #converting jitter into a factor
 av_AVQI_B$Jitter <- as.numeric(levels(av_AVQI_B$Jitter))[av_AVQI_B$Jitter]
 
-av_AVQI_B
+#av_AVQI_B
 ```
 
 ##Re-training the roughness tree
@@ -192,8 +192,6 @@ roughness_model_opt <- prune(tree = roughness_model, cp = cp_opt)
 #trying this:
 rpart.plot(x = roughness_model_opt, type = 0)
 ```
-
-:/
 
 Grid search:
 
@@ -282,13 +280,22 @@ library(ipred)
 set.seed(1557)
 
 #training a bagged model
-roughness_model_bag <- bagging(formula = Roughness ~ .,
+roughness_model_ipred <- bagging(formula = Roughness ~ .,
                            data = roughness_train,
                            coob = TRUE) #=using out-of-bag samples to estimate model accuracy
 
 #printing the model
-roughness_model_bag
+roughness_model_ipred
 
+#calculating the rmse of the ipred model
+pred <- predict(object = roughness_model_ipred,
+                newdata = roughness_test)
+                
+#computing the rmse
+roughness_ipred_rmse <- rmse(actual = roughness_test$Roughness,
+     predicted = pred)
+
+roughness_ipred_rmse
 ```
 
 Assessing the bagged trees:
@@ -326,18 +333,111 @@ library(caret)
 #specify a 10-fold cross validation
 ctrl <- trainControl(method = "cv", number = 10)
 
-#cross-validation bagged model
-bagged_cv <- train(
+#cross-validating the bagged model
+set.seed(1753)
+roughness_caret_model <- train(
   Roughness ~ .,
   data = roughness_train,
   method = "treebag",
   trControl = ctrl,
-  mtry = 45, #according to the above step
-  importance = TRUE,
+  #mtry = 45, #according to the above step
+  #importance = TRUE,
   na.action = na.pass #ignore N/A's
 )
 
-plot(varImp(bagged_cv), 8)
+plot(varImp(roughness_caret_model), 8)
 ```
 
+Generate predictions from the caret model:
+```{r}
+pred <- predict(object = roughness_caret_model,
+                newdata = roughness_test)
+                #type = ""
+#computing the rmse
+roughness_caret_rmse <- rmse(actual = roughness_test$Roughness,
+     predicted = pred)
+
+roughness_caret_rmse
+```
+
+Comparing the test set performance to CV performance:
+```{r}
+#printing ipred::bagging test set rmse estimate
+print(roughness_ipred_rmse)
+print(roughness_caret_rmse)
+roughness_caret_model$results[,"RMSE"] #average of the 10 models in the 10-fold cross validation
+```
+
+Random forests:
+```{r}
+library(randomForest)
+library(randomForestExplainer)
+#set.seed(1826)
+#training the random forest
+roughness_forest <- randomForest(formula = Roughness ~ ., data = roughness_train, na.action = na.omit, localImp = TRUE)
+
+#print the model output
+print(roughness_forest)
+
+#explain_forest(roughness_forest)
+```
+
+Evaluating test set rmse
+```{r}
+#generating predictions on the test set
+pred <- predict(object = roughness_forest,
+                newdata = roughness_test,
+                type = "response")
+class(pred)
+
+head(pred)
+
+#computing the rmse
+rmse(actual = roughness_test$Roughness,
+     predicted = pred)
+```
+
+Tuning mtry
+```{r}
+#executing the tuning process
+#set.seed(1920)
+roughness_train <- roughness_train[complete.cases(roughness_train), ]
+res <- tuneRF(x = subset(roughness_train, select = -Roughness),
+              y = roughness_train$Roughness,
+              ntreeTry = 500,
+              doBest = TRUE)
+res
+```
+
+Tuning a random forest via tree depth
+```{r}
+#Establishing a list of possible values for mtry, nodesize, and samplesize
+mtry <- seq(4, ncol(roughness_train)*0.8, 2)
+nodesize <- seq(3, 8, 2)
+sampsize <- nrow(roughness_train) * c(0.7*0.8)
+
+#creating a data frame containing all combinations
+hyper_grid <- expand.grid(mtry = mtry, nodesize = nodesize, sampsize = sampsize)
+
+#creating an empty vector to store OOB error values
+oob_err <- c()
+
+#loop over the rows of hype_frid to train the grid of models
+for (i in 1:nrow(hyper_grid)) {
+  #train a Random Forest model
+  model <- randomForest(formula = Roughness ~ .,
+                        data = roughness_train,
+                        mtry = hyper_grid$mtry[i],
+                        nodesize = hyper_grid$nodesize[i],
+                        sampsize = hyper_grid$sampsize[i])
+  #store OOB error for the model
+  #oob_err[i] <- model$
+  
+}
+```
+
+```{r}
+AVQI_RB
+
+```
 

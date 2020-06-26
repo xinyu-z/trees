@@ -57,13 +57,13 @@ SLP2 <- listener2 %>%
   dplyr::select(-Num)
 
 #join the two listening results tables by matching both Speaker and T
-SLP <-rbind(SLP1,SLP2) %>% 
+SLP_filtered <-rbind(SLP1,SLP2) %>% 
   dplyr::select(-Z, -A) %>% #filterting out the extreme corners
   filter(!(Roughness > 750 & Breathiness > 750) & !(Roughness < 250 & Breathiness <250))
 
-SLP$dummy <- paste(SLP$Speaker, "-", SLP$T)
+SLP_filtered$dummy <- paste(SLP_filtered$Speaker, "-", SLP$T)
 
-glimpse(SLP)
+glimpse(SLP_filtered)
 ```
 
 Merging the two subjective scores with the AVQI table:
