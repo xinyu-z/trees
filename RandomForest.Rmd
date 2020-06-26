@@ -1,0 +1,98 @@
+---
+title: "Random Forest"
+author: "Xinyu Zhang"
+date: "6/26/2020"
+output: html_document
+---
+Reading data:
+```{r}
+library(dplyr)
+#reading in listening test results
+listener1 <- read.csv("Results_AK.csv", header = TRUE, sep = ";")
+listener2 <- read.csv("Results_KS.csv", header = TRUE, sep = ";")
+#renaming the two answers, removing column "Num"
+SLP1 <- listener1 %>%
+  dplyr::select(-Num) %>% 
+  rename(Roughness = Answer1, Breathiness = Answer2)
+SLP1$dummy <- paste(SLP1$Speaker, "-", SLP1$T)
+#nrow(SLP1) #96
+
+SLP2 <- listener2 %>%
+  rename(Roughness = Answer1, Breathiness = Answer2)%>%
+  dplyr::select(-Num)
+SLP2$dummy <- paste(SLP2$Speaker, "-", SLP2$T)
+#nrow(SLP2) #96
+
+AVQI <- read.csv("AVQI_results_new.csv")
+AVQI$dummy <- paste(AVQI$Speaker, "-", AVQI$T)
+AVQI$Jitter <- as.numeric(levels(AVQI$Jitter))[AVQI$Jitter]
+
+AVQI_RB_1 <- inner_join(SLP1,AVQI, by = "dummy")#retain only rows in both sets
+#nrow(AVQI_BR_1) #96
+
+AVQI_RB_2 <- inner_join(SLP2, AVQI, by = "dummy")#retain only rows in both sets
+#nrow(AVQI_BR_2) #96
+
+#join the two listening results tables by matching both Speaker and T
+AVQI_RB <-rbind(AVQI_RB_1,AVQI_RB_2) %>% 
+  dplyr::select(-A, -Speaker.x, -Speaker.y, -T.x, -T.x, -T.y, -Version, -Z)
+#nrow(AVQI_RB) #192 (= 96 *2)
+glimpse(AVQI_RB)
+
+AVQI_R <- AVQI_RB %>% 
+  dplyr::select(-Breathiness, - dummy, -AVQI, -Subject)
+
+AVQI_B <- AVQI_RB %>% 
+  dplyr::select(-Roughness, - dummy, -AVQI, -Subject)
+```
+
+Partitioning:
+```{r}
+set.seed(2008)
+assignment <- sample(1:2, size = nrow(AVQI_R), prob = c(0.7, 3), replace = TRUE)
+
+rough_train <- AVQI_R[assignment == 1, ]
+rough_test <- AVQI_R[assignment == 2, ]
+```
+
+Single trees:
+```{r}
+library(rpart)
+rough.tree <- rpart(formula = Roughness ~ .,
+                   data = rough_train,
+                   method = "anova")
+library(rpart.plot)
+rpart.plot(x = rough.tree, yesno = 2, type = 0, extra = 0)
+```
+
+HNR alone
+
+Alternative tree:
+```{r}
+library(tree)
+rough.tree = tree(formula = Roughness ~ ., data = rough_train) 
+summary(rough.tree)
+```
+Variables: HNR, Shimmer, SHdB, Jitter
+
+Plotting the tree:
+```{r}
+plot(rough.tree)
+text(rough.tree, pretty = 0)
+```
+
+Pruning:
+```{r}
+cv.rough = cv.tree(rough.tree)
+plot(cv.rough$size, cv.rough$dev, type = 'b')
+
+prune.rough = prune.tree(rough.tree, best = 4)
+plot(prune.rough)
+text(prune.rough, pretty = 0)
+```
+
+Assessing the tree:
+```{r}
+
+```
+
