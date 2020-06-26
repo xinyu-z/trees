@@ -1,0 +1,200 @@
+---
+title: "Jun26"
+author: "Xinyu Zhang"
+date: "6/26/2020"
+output: html_document
+---
+Reshaping the tables:
+```{r}
+library(dplyr)
+#reading in listening test results
+listener1 <- read.csv("Results_AK.csv", header = TRUE, sep = ";")
+listener2 <- read.csv("Results_KS.csv", header = TRUE, sep = ";")
+#renaming the two answers, removing column "Num"
+SLP1 <- listener1 %>%
+  dplyr::select(-Num) %>% 
+  rename(Roughness = Answer1, Breathiness = Answer2)
+SLP1$dummy <- paste(SLP1$Speaker, "-", SLP1$T)
+#nrow(SLP1) #96
+
+SLP2 <- listener2 %>%
+  rename(Roughness = Answer1, Breathiness = Answer2)%>%
+  dplyr::select(-Num)
+SLP2$dummy <- paste(SLP2$Speaker, "-", SLP2$T)
+#nrow(SLP2) #96
+
+AVQI <- read.csv("AVQI_results_new.csv")
+AVQI$dummy <- paste(AVQI$Speaker, "-", AVQI$T)
+AVQI$Jitter <- as.numeric(levels(AVQI$Jitter))[AVQI$Jitter]
+
+AVQI_RB_1 <- inner_join(SLP1,AVQI, by = "dummy")#retain only rows in both sets
+#nrow(AVQI_BR_1) #96
+
+AVQI_RB_2 <- inner_join(SLP2, AVQI, by = "dummy")#retain only rows in both sets
+#nrow(AVQI_BR_2) #96
+
+#join the two listening results tables by matching both Speaker and T
+AVQI_RB <-rbind(AVQI_RB_1,AVQI_RB_2) %>% 
+  dplyr::select(-A, -Speaker.x, -Speaker.y, -T.x, -T.x, -T.y, -Version, -Z)
+#nrow(AVQI_RB) #192 (= 96 *2)
+glimpse(AVQI_RB)
+```
+The Breathiness and Roughness ratings are treated as separate instead of averaged over two SLPs
+
+The Averaged alternative:
+```{r}
+mSLP <-full_join(SLP1,SLP2, by = "dummy") %>% 
+  dplyr::select(-T.x, -Speaker.y, -Z.x, -Z.y, -T.y, -Speaker.x, -A.x, -A.y)
+
+mSLP$RoughMean <- rowMeans(mSLP[,c('Roughness.x', 'Roughness.y')], na.rm=TRUE)
+
+mSLP$BreathyMean <- rowMeans(mSLP[,c('Breathiness.x', 'Breathiness.y')], na.rm=TRUE)
+
+mSLP <- mSLP %>% 
+  dplyr::select(dummy, RoughMean, BreathyMean)
+
+#nrow(mSLP) #96 
+
+AVQI_mRB <- inner_join(mSLP,AVQI, by = "dummy") %>% 
+  dplyr::select(-Speaker, -T, -Version) %>% 
+  glimpse
+```
+
+On averaged data:
+```{r}
+mBreathyModel <- lm(BreathyMean ~ RoughMean, AVQI_mRB)
+summary(mBreathyModel)
+```
+
+```{r}
+mBreathyCorrelated <- fitted(mBreathyModel, AVQI_mRB$RoughMean)
+
+# Part of Breathiness not predicted by Roughness
+AVQI_mRB$mBreathyDecorr <- AVQI_mRB$BreathyMean - mBreathyCorrelated
+str(AVQI_mRB)
+```
+
+```{r}
+#removing NAs
+AVQI_mRB_c <- na.omit(AVQI_mRB)
+mRoughModel.tmp <- lm(RoughMean ~ CPPS + HNR + Jitter + Shimmer + ShdB + Slope + Tilt, AVQI_mRB_c)
+step(mRoughModel.tmp)
+mRoughModel <- step(mRoughModel.tmp)
+summary(mRoughModel)
+```
+CPPS and HNR
+
+```{r}
+library(MASS)
+AVQI_mR<- AVQI_mRB_c %>% 
+  dplyr::select(-dummy, -BreathyMean, -mBreathyDecorr, -AVQI)
+min.modelRm <- lm(RoughMean ~., data = AVQI_mR)
+step.modelRm<- stepAIC(min.modelRm, direction = "both", 
+                      trace = FALSE)
+summary(step.modelRm)
+```
+CPPS and HNR
+
+```{r}
+mRoughModel <- lm(RoughMean ~ CPPS + HNR, AVQI_mR)
+summary(mRoughModel)
+```
+
+For Breathiness:
+```{r}
+mBreathyModel.tmp <- lm(mBreathyDecorr ~ CPPS + HNR + Jitter + Shimmer + ShdB + Slope + Tilt, AVQI_mRB_c)
+step(mBreathyModel.tmp)
+mBreathyModel <- step(mBreathyModel.tmp)
+summary(mBreathyModel)
+```
+CPPS and HNR
+
+Alternative:
+```{r}
+AVQI_mB<- AVQI_mRB_c %>% 
+  dplyr::select(-dummy, -RoughMean, -BreathyMean, -AVQI)
+min.modelB <- lm(mBreathyDecorr ~., data = AVQI_mB)
+step.modelB<- stepAIC(min.modelB, direction = "both", 
+                      trace = FALSE)
+summary(step.modelB)
+```
+Also CPPS and HNR
+
+```{r}
+mBreathyModel <- lm(mBreathyDecorr ~ CPPS + HNR, AVQI_mB)
+summary(mBreathyModel)
+```
+
+Trying on un-averaged data:
+```{r}
+BreathyModel <- lm(Breathiness ~ Roughness, AVQI_RB)
+summary(BreathyModel)
+```
+
+```{r}
+BreathyCorrelated <- fitted(BreathyModel, AVQI_RB$Roughness)
+
+# Part of Breathiness not predicted by Roughness
+AVQI_RB$BreathyDecorr <- AVQI_RB$Breathiness - BreathyCorrelated
+```
+
+For Roughness:
+```{r}
+#removing NAs
+AVQI_RB_c <- na.omit(AVQI_RB)
+RoughModel.tmp <- lm(Roughness ~ CPPS + HNR + Jitter + Shimmer + ShdB + Slope + Tilt, AVQI_RB_c)
+step(RoughModel.tmp)
+RoughModel <- step(RoughModel.tmp)
+summary(RoughModel)
+```
+CPPS, HNR, Tilt
+
+
+```{r}
+AVQI_R<- AVQI_RB_c %>% 
+  dplyr::select(-dummy, -Breathiness, -BreathyDecorr, -AVQI, -Subject)
+min.modelR <- lm(Roughness ~., data = AVQI_R)
+step.modelR<- stepAIC(min.modelR, direction = "both", 
+                      trace = FALSE)
+summary(step.modelR)
+```
+Also CPPS, HNR,Tilt
+
+```{r}
+RoughModel <- lm (Roughness ~ CPPS + HNR + Tilt, data = AVQI_R)
+summary(RoughModel)
+```
+
+
+For Breathiness:
+```{r}
+BreathyModel.tmp <- lm(BreathyDecorr ~ CPPS + HNR + Jitter + Shimmer + ShdB + Slope + Tilt, AVQI_RB_c)
+step(BreathyModel.tmp)
+BreathyModel <- step(BreathyModel.tmp)
+summary(BreathyModel)
+```
+CPPS, HNR, ShdB
+
+Alternative:
+```{r}
+AVQI_B<- AVQI_RB_c %>% 
+  dplyr::select(-dummy, -Roughness, -Breathiness, -AVQI, -Subject)
+min.modelB <- lm(BreathyDecorr ~., data = AVQI_B)
+step.modelB<- stepAIC(min.modelB, direction = "both", 
+                      trace = FALSE)
+summary(step.modelB)
+```
+Also CPPS, HNR, ShdB
+
+```{r}
+BreathyModel <- lm(BreathyDecorr ~ CPPS + HNR + ShdB, AVQI_B)
+summary(BreathyModel)
+```
+ShdB not significant.
+
+Combining the correlated part:
+```{r}
+BreathyModel <- lm(Breathiness ~ CPPS + HNR + Tilt + ShdB, data = AVQI_RB)
+summary(BreathyModel)
+```
+ShdB not significant. Adjusted R-squared: 0.5176
