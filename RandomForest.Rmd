@@ -46,6 +46,8 @@ AVQI_B <- AVQI_RB %>%
   dplyr::select(-Roughness, - dummy, -AVQI, -Subject)
 ```
 
+Roughness:
+
 Partitioning:
 ```{r}
 set.seed(2008)
@@ -58,11 +60,11 @@ rough_test <- AVQI_R[assignment == 2, ]
 Single trees:
 ```{r}
 library(rpart)
-rough.tree <- rpart(formula = Roughness ~ .,
+roughtree <- rpart(formula = Roughness ~ .,
                    data = rough_train,
                    method = "anova")
 library(rpart.plot)
-rpart.plot(x = rough.tree, yesno = 2, type = 0, extra = 0)
+rpart.plot(x = roughtree, yesno = 2, type = 0, extra = 0)
 ```
 
 HNR alone
@@ -86,13 +88,147 @@ Pruning:
 cv.rough = cv.tree(rough.tree)
 plot(cv.rough$size, cv.rough$dev, type = 'b')
 
-prune.rough = prune.tree(rough.tree, best = 4)
+prune.rough = prune.tree(rough.tree, best = 5)
 plot(prune.rough)
 text(prune.rough, pretty = 0)
 ```
 
-Assessing the tree:
-```{r}
 
+
+Assessing the unpruned tree:
+```{r}
+yhat = predict(rough.tree, newdata = rough_test)
+rough.test = rough_test$Roughness
+plot(yhat, rough.test)
+abline (0,1)
 ```
+
+```{r}
+sqrt(mean((yhat-rough.test)^2))
+```
+
+Bagging:
+```{r}
+library(randomForest)
+set.seed(1745)
+train.completeR <- na.omit(rough_train)#removing NAs
+rough.bag = randomForest(Roughness ~ ., data = train.completeR, mtry = 7, importance = TRUE)
+rough.bag
+```
+
+Assessing the bagged tree:
+```{r}
+test.completeR <- na.omit(rough_test) #removing rows with NAs
+yhat.bagR = predict(rough.bag, newdata = test.complete)
+plot(yhat.bagR, test.completeR$Roughness)
+abline (0,1)
+```
+
+```{r}
+sqrt(mean((yhat.bag - test.completeR$Roughness)^2))
+```
+^improved a little over the single tree
+
+random forest:
+```{r}
+set.seed(0036)
+rough.forest = randomForest(Roughness ~ ., data = train.complete, mtry = 2, importance = TRUE)
+yhat.forest = predict(rough.forest, newdata = test.complete)
+plot(yhat.forest, test.complete$Roughness)
+abline(0,1)
+```
+
+rmse:
+```{r}
+sqrt(mean(yhat.forest - test.complete$Roughness)^2)
+```
+^improved upon bagged trees.
+
+Importance of variables:
+```{r}
+importance(rough.forest)
+```
+Plotting the importance:
+```{r}
+varImpPlot(rough.forest)
+```
+
+Breathiness:
+
+Partitioning:
+```{r}
+set.seed(0108)
+assignment <- sample(1:2, size = nrow(AVQI_B), prob = c(0.7, 3), replace = TRUE)
+
+breathy_train <- AVQI_B[assignment == 1, ]
+breathy_test <- AVQI_B[assignment == 2, ]
+```
+
+Single tree:
+```{r}
+library(rpart)
+breathytree <- rpart(formula = Breathiness ~ .,
+                   data = breathy_train,
+                   method = "anova")
+library(rpart.plot)
+rpart.plot(x = breathytree, yesno = 2, type = 0, extra = 0)
+```
+Tilt alone.
+
+Alternative tree:
+```{r}
+library(tree)
+breathy.tree = tree(formula = Breathiness ~ ., data = breathy_train) 
+summary(breathy.tree)
+```
+Variables: Tilt, Shimmer, Jitter
+
+
+Assessing the unpruned tree:
+```{r}
+yhat = predict(breathy.tree, newdata = breathy_test)
+breathy.test = breathy_test$Breathiness
+plot(yhat, breathy.test)
+abline (0,1)
+```
+
+```{r}
+sqrt(mean((yhat-rough.test)^2))
+```
+
+
+
+
+random forest:
+```{r}
+set.seed(0109)
+btest.complete <- na.omit(breathy_test)
+btrain.complete <- na.omit(breathy_train)
+breathy.forest = randomForest(Breathiness ~ ., data = breathy_train, mtry = 2, importance = TRUE)
+yhat.Bforest = predict(breathy.forest, newdata = btest.complete)
+plot(yhat.Bforest, btest.complete$Breathiness)
+abline(0,1)
+```
+
+rmse:
+```{r}
+sqrt(mean(yhat.Bforest - btest.complete$Breathiness)^2)
+```
+
+Importance of variables:
+```{r}
+importance(breathy.forest)
+```
+
+
+Plotting the importance:
+```{r}
+varImpPlot(breathy.forest)
+```
+
+
+
+
+
+
 
