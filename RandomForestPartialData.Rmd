@@ -1,0 +1,166 @@
+---
+title: "Random Forest on Partial Data"
+author: "Xinyu Zhang"
+date: "6/29/2020"
+output: html_document
+---
+
+```{r}
+#Only fitting one line over all points, regardless of subjects
+merged <- read.csv("merged.csv")
+library(ggplot2)
+ggplot(data = merged, aes(x = Roughness, y = Breathiness)) + 
+  geom_point(aes(color = Subject)) +
+  geom_smooth(method = "lm")
+```
+
+```{r}
+#excluding the upper-right-most and lower-left-most squares
+merged2 <- merged %>% 
+  filter(!(Roughness > 750 & Breathiness > 750) & !(Roughness < 250 & Breathiness <250)) %>%
+  glimpse
+
+ggplot(data = merged2, aes(x = Roughness, y = Breathiness))+
+         geom_point(aes(color = Subject))+
+         geom_smooth(method = "lm")
+
+```
+
+```{r}
+library(dplyr)
+#reading in listening test results
+listener1 <- read.csv("Results_AK.csv", header = TRUE, sep = ";")
+listener2 <- read.csv("Results_KS.csv", header = TRUE, sep = ";")
+#renaming the two answers, removing column "Num"
+SLP1 <- listener1 %>%
+  rename(Roughness = Answer1, Breathiness = Answer2)%>%
+  dplyr::select(-Num)
+
+SLP2 <- listener2 %>%
+  rename(Roughness = Answer1, Breathiness = Answer2)%>%
+  dplyr::select(-Num)
+
+#join the two listening results tables by matching both Speaker and T
+SLP <-rbind(SLP1,SLP2) %>% 
+  dplyr::select(-Z, -A) %>% 
+  filter(!(Roughness > 750 & Breathiness > 750) & !(Roughness < 250 & Breathiness <250))
+
+SLP$dummy <- paste(SLP$Speaker, "-", SLP$T)
+
+AVQI <- read.csv("AVQI_results_new.csv")
+#create a dummy column as an identifier for each "Speaker-T" entry
+AVQI$dummy <- paste(AVQI$Speaker, "-", AVQI$T)
+
+SLPRough <- SLP %>% 
+  dplyr::select(Roughness, dummy)
+
+#merging ("left-join" only appends AVQI entries that has SLP rating correspondents)
+library(dplyr)
+AVQI_R <-left_join(SLPRough,AVQI, by = "dummy")%>%
+  dplyr::select(-Speaker, -T, -AVQI, -dummy)
+
+#converting jitter into a numeric variable
+AVQI_R$Jitter <- as.numeric(levels(AVQI_R$Jitter))[AVQI_R$Jitter]
+
+SLPBreathy <- SLP %>% 
+  dplyr::select(Breathiness, dummy)
+
+#merging ("left-join" only appends AVQI entries that has SLP rating correspondents)
+library(dplyr)
+AVQI_B <-left_join(SLPBreathy,AVQI, by = "dummy")%>%
+  dplyr::select(-Speaker, -T, -AVQI, -dummy)
+
+#converting jitter into a factor
+AVQI_B$Jitter <- as.numeric(levels(AVQI_B$Jitter))[AVQI_B$Jitter]
+
+```
+
+Random forests:
+
+Partitioning:
+```{r}
+#setting seed for reproducibility
+set.seed(1606)
+
+#deviding the data into three parts
+
+#setting proportions, 70% for training, devide the remainder into two halves
+assignment <- sample(1:2, size = nrow(AVQI_R), prob = c(0.7, 0.3), replace = TRUE)
+
+#subsetting the data to training indices
+roughness_train <- AVQI_R[assignment == 1, ]
+
+#subsetting the data to test indices
+roughness_test <- AVQI_R[assignment == 2, ]
+```
+
+```{r}
+library(randomForest)
+library(randomForestExplainer)
+set.seed(0036)
+rough_trainC <- na.omit(roughness_train)
+rough_testC <- na.omit(roughness_test)
+rough_forest = randomForest(Roughness ~ ., data = rough_trainC, mtry = 2, importance = TRUE)
+yhat_forestR = predict(roughness_forest, newdata = rough_testC)
+plot(yhat_forestR, rough_testC$Roughness)
+abline(0,1)
+```
+
+rmse:
+```{r}
+sqrt(mean(yhat_forestR - rough_testC$Roughness)^2)
+```
+
+Importance of variables:
+```{r}
+importance(rough_forest)
+```
+Plotting the importance:
+```{r}
+varImpPlot(rough_forest)
+```
+
+
+Breathiness:
+
+Partitioning:
+```{r}
+#setting seed for reproducibility
+set.seed(1606)
+
+#deviding the data into three parts
+
+#setting proportions, 70% for training, devide the remainder into two halves
+assignment <- sample(1:2, size = nrow(AVQI_B), prob = c(0.7, 0.3), replace = TRUE)
+
+#subsetting the data to training indices
+breathiness_train <- AVQI_B[assignment == 1, ]
+
+#subsetting the data to test indices
+breathiness_test <- AVQI_B[assignment == 2, ]
+```
+
+```{r}
+set.seed(0036)
+breathy_trainC <- na.omit(breathiness_train)
+breathy_testC <- na.omit(breathiness_test)
+breathy_forest = randomForest(Breathiness ~ ., data = breathy_trainC, mtry = 2, importance = TRUE)
+yhat_forestB = predict(breathy_forest, newdata = breathy_testC)
+plot(yhat_forestB, breathy_testC$Breathiness)
+abline(0,1)
+```
+
+rmse:
+```{r}
+sqrt(mean(yhat_forestB - breathy_testC$Breathiness)^2)
+```
+
+Importance of variables:
+```{r}
+importance(breathy_forest)
+```
+
+Plotting the importance:
+```{r}
+varImpPlot(breathy_forest)
+```
