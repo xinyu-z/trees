@@ -132,15 +132,15 @@ sqrt(mean((yhat.bag - test.completeR$Roughness)^2))
 random forest:
 ```{r}
 set.seed(0036)
-rough.forest = randomForest(Roughness ~ ., data = train.complete, mtry = 2, importance = TRUE)
-yhat.forest = predict(rough.forest, newdata = test.complete)
-plot(yhat.forest, test.complete$Roughness)
+rough.forest = randomForest(Roughness ~ ., data = train.completeR, mtry = 2, importance = TRUE)
+yhat.forest = predict(rough.forest, newdata = test.completeR)
+plot(yhat.forest, test.completeR$Roughness)
 abline(0,1)
 ```
 
 rmse:
 ```{r}
-sqrt(mean(yhat.forest - test.complete$Roughness)^2)
+sqrt(mean(yhat.forest - test.completeR$Roughness)^2)
 ```
 ^improved upon bagged trees.
 
@@ -193,7 +193,7 @@ abline (0,1)
 ```
 
 ```{r}
-sqrt(mean((yhat-rough.test)^2))
+sqrt(mean((yhat-breathy.test)^2))
 ```
 
 
@@ -202,11 +202,11 @@ sqrt(mean((yhat-rough.test)^2))
 random forest:
 ```{r}
 set.seed(0109)
-btest.complete <- na.omit(breathy_test)
-btrain.complete <- na.omit(breathy_train)
-breathy.forest = randomForest(Breathiness ~ ., data = breathy_train, mtry = 2, importance = TRUE)
-yhat.Bforest = predict(breathy.forest, newdata = btest.complete)
-plot(yhat.Bforest, btest.complete$Breathiness)
+test.completeB <- na.omit(breathy_test)
+train.completeB <- na.omit(breathy_train)
+breathy.forest = randomForest(Breathiness ~ ., data = train.completeB, mtry = 2, importance = TRUE)
+yhat.Bforest = predict(breathy.forest, newdata = test.completeB)
+plot(yhat.Bforest, test.completeB$Breathiness)
 abline(0,1)
 ```
 

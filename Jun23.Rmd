@@ -94,14 +94,14 @@ SLPRough <- SLP %>%
 
 #merging ("left-join" only appends AVQI entries that has SLP rating correspondents)
 library(dplyr)
-av_AVQI_R <-left_join(SLPRough,AVQI, by = "dummy")%>%
+AVQI_R <-left_join(SLPRough,AVQI, by = "dummy")%>%
   dplyr::select(-Speaker, -T, -AVQI, -dummy)
 
 #converting jitter into a factor
-av_AVQI_R$Jitter <- as.numeric(levels(av_AVQI_R$Jitter))[av_AVQI_R$Jitter]
+AVQI_R$Jitter <- as.numeric(levels(AVQI_R$Jitter))[AVQI_R$Jitter]
 
 #have a look at the whole table
-#av_AVQI_R
+#AVQI_R
 ```
 
 ```{r}
@@ -110,13 +110,13 @@ SLPBreathy <- SLP %>%
 
 #merging ("left-join" only appends AVQI entries that has SLP rating correspondents)
 library(dplyr)
-av_AVQI_B <-left_join(SLPBreathy,AVQI, by = "dummy")%>%
+AVQI_B <-left_join(SLPBreathy,AVQI, by = "dummy")%>%
   dplyr::select(-Speaker, -T, -AVQI, -dummy)
 
 #converting jitter into a factor
-av_AVQI_B$Jitter <- as.numeric(levels(av_AVQI_B$Jitter))[av_AVQI_B$Jitter]
+AVQI_B$Jitter <- as.numeric(levels(AVQI_B$Jitter))[AVQI_B$Jitter]
 
-#av_AVQI_B
+#AVQI_B
 ```
 
 ##Re-training the roughness tree
@@ -129,16 +129,16 @@ set.seed(1606)
 #deviding the data into three parts
 
 #setting proportions, 70% for training, devide the remainder into two halves
-assignment <- sample(1:3, size = nrow(av_AVQI_R), prob = c(0.7, 0.15, 0.15), replace = TRUE)
+assignment <- sample(1:3, size = nrow(AVQI_R), prob = c(0.7, 0.15, 0.15), replace = TRUE)
 
 #subsetting the data to training indices
-roughness_train <- av_AVQI_R[assignment == 1, ]
+roughness_train <- AVQI_R[assignment == 1, ]
 
 #subsetting the data to validation indices
-roughness_valid <- av_AVQI_R[assignment == 2, ]
+roughness_valid <- AVQI_R[assignment == 2, ]
 
 #subsetting the data to test indices
-roughness_test <- av_AVQI_R[assignment == 3, ]
+roughness_test <- AVQI_R[assignment == 3, ]
 ```
 
 Training the model:
@@ -369,75 +369,71 @@ roughness_caret_model$results[,"RMSE"] #average of the 10 models in the 10-fold 
 ```
 
 Random forests:
+
+Partitioning:
+```{r}
+#setting seed for reproducibility
+set.seed(1606)
+
+#deviding the data into three parts
+
+#setting proportions, 70% for training, devide the remainder into two halves
+assignment <- sample(1:2, size = nrow(AVQI_R), prob = c(0.7, 0.3), replace = TRUE)
+
+#subsetting the data to training indices
+roughness_train <- AVQI_R[assignment == 1, ]
+
+#subsetting the data to test indices
+roughness_test <- AVQI_R[assignment == 2, ]
+```
+
 ```{r}
 library(randomForest)
 library(randomForestExplainer)
-#set.seed(1826)
-#training the random forest
-roughness_forest <- randomForest(formula = Roughness ~ ., data = roughness_train, na.action = na.omit, localImp = TRUE)
-
-#print the model output
-print(roughness_forest)
-
-#explain_forest(roughness_forest)
+set.seed(0036)
+rough_trainC <- na.omit(roughness_train)
+rough_testC <- na.omit(roughness_test)
+roughness_forest = randomForest(Roughness ~ ., data = rough_trainC, mtry = 2, importance = TRUE)
+yhat_forestR = predict(roughness_forest, newdata = rough_testC)
+plot(yhat_forestR, rough_testC$Roughness)
+abline(0,1)
 ```
 
-Evaluating test set rmse
+rmse:
 ```{r}
-#generating predictions on the test set
-pred <- predict(object = roughness_forest,
-                newdata = roughness_test,
-                type = "response")
-class(pred)
-
-head(pred)
-
-#computing the rmse
-rmse(actual = roughness_test$Roughness,
-     predicted = pred)
+sqrt(mean(yhat_forestR - rough_testC$Roughness)^2)
 ```
 
-Tuning mtry
+Breathiness:
+
+Partitioning:
 ```{r}
-#executing the tuning process
-#set.seed(1920)
-roughness_train <- roughness_train[complete.cases(roughness_train), ]
-res <- tuneRF(x = subset(roughness_train, select = -Roughness),
-              y = roughness_train$Roughness,
-              ntreeTry = 500,
-              doBest = TRUE)
-res
-```
+#setting seed for reproducibility
+set.seed(1606)
 
-Tuning a random forest via tree depth
-```{r}
-#Establishing a list of possible values for mtry, nodesize, and samplesize
-mtry <- seq(4, ncol(roughness_train)*0.8, 2)
-nodesize <- seq(3, 8, 2)
-sampsize <- nrow(roughness_train) * c(0.7*0.8)
+#deviding the data into three parts
 
-#creating a data frame containing all combinations
-hyper_grid <- expand.grid(mtry = mtry, nodesize = nodesize, sampsize = sampsize)
+#setting proportions, 70% for training, devide the remainder into two halves
+assignment <- sample(1:2, size = nrow(AVQI_B), prob = c(0.7, 0.3), replace = TRUE)
 
-#creating an empty vector to store OOB error values
-oob_err <- c()
+#subsetting the data to training indices
+breathiness_train <- AVQI_B[assignment == 1, ]
 
-#loop over the rows of hype_frid to train the grid of models
-for (i in 1:nrow(hyper_grid)) {
-  #train a Random Forest model
-  model <- randomForest(formula = Roughness ~ .,
-                        data = roughness_train,
-                        mtry = hyper_grid$mtry[i],
-                        nodesize = hyper_grid$nodesize[i],
-                        sampsize = hyper_grid$sampsize[i])
-  #store OOB error for the model
-  #oob_err[i] <- model$
-  
-}
+#subsetting the data to test indices
+breathiness_test <- AVQI_B[assignment == 2, ]
 ```
 
 ```{r}
-AVQI_RB
-
+set.seed(0036)
+breathy_trainC <- na.omit(breathiness_train)
+breathy_testC <- na.omit(breathiness_test)
+breathy_forest = randomForest(Breathiness ~ ., data = breathy_trainC, mtry = 2, importance = TRUE)
+yhat_forestB = predict(breathy_forest, newdata = breathy_testC)
+plot(yhat_forestB, breathy_testC$Breathiness)
+abline(0,1)
 ```
 
+rmse:
+```{r}
+sqrt(mean(yhat_forestB - breathy_testC$Breathiness)^2)
+```
