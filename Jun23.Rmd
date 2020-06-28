@@ -97,7 +97,7 @@ library(dplyr)
 AVQI_R <-left_join(SLPRough,AVQI, by = "dummy")%>%
   dplyr::select(-Speaker, -T, -AVQI, -dummy)
 
-#converting jitter into a factor
+#converting jitter into numeric
 AVQI_R$Jitter <- as.numeric(levels(AVQI_R$Jitter))[AVQI_R$Jitter]
 
 #have a look at the whole table
