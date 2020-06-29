@@ -1,0 +1,18 @@
+---
+title: "PCA"
+author: "Xinyu Zhang"
+date: "6/29/2020"
+output: html_document
+---
+```{r}
+AVQI_RB <- read.csv("AVQI_RB.csv")
+library(dplyr)
+cAVQI_RB <- na.omit(AVQI_RB) %>% 
+  dplyr::select(-Subject, -dummy)
+
+#remember to remove roughness here
+pca <- prcomp(cAVQI_RB, scale = TRUE)
+pca
+
+summary(pca)
+```
