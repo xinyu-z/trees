@@ -44,6 +44,7 @@ AVQI_R <- AVQI_RB %>%
 
 AVQI_B <- AVQI_RB %>% 
   dplyr::select(-Roughness, - dummy, -AVQI, -Subject)
+#write.csv(AVQI_RB, "AVQI_RB.csv")
 ```
 
 Roughness:
