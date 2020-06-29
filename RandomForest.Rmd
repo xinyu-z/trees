@@ -99,7 +99,7 @@ Assessing the unpruned tree:
 ```{r}
 yhat = predict(rough.tree, newdata = rough_test)
 rough.test = rough_test$Roughness
-plot(yhat, rough.test)
+plot(yhat, rough.test, xlab = "predicted roughness", ylab = "roughness by SLPs")
 abline (0,1)
 ```
 
@@ -119,13 +119,13 @@ rough.bag
 Assessing the bagged tree:
 ```{r}
 test.completeR <- na.omit(rough_test) #removing rows with NAs
-yhat.bagR = predict(rough.bag, newdata = test.complete)
-plot(yhat.bagR, test.completeR$Roughness)
+yhat.bagR = predict(rough.bag, newdata = test.completeR)
+plot(yhat.bagR, test.completeR$Roughness, xlab = "predicted roughness", ylab = "roughness by SLPs" )
 abline (0,1)
 ```
 
 ```{r}
-sqrt(mean((yhat.bag - test.completeR$Roughness)^2))
+sqrt(mean((yhat.bagR - test.completeR$Roughness)^2))
 ```
 ^improved a little over the single tree
 
@@ -134,7 +134,7 @@ random forest:
 set.seed(0036)
 rough.forest = randomForest(Roughness ~ ., data = train.completeR, mtry = 2, importance = TRUE)
 yhat.forest = predict(rough.forest, newdata = test.completeR)
-plot(yhat.forest, test.completeR$Roughness)
+plot(yhat.forest, test.completeR$Roughness, xlab = "predicted roughness", ylab = "roughness by SLPs")
 abline(0,1)
 ```
 
@@ -188,7 +188,7 @@ Assessing the unpruned tree:
 ```{r}
 yhat = predict(breathy.tree, newdata = breathy_test)
 breathy.test = breathy_test$Breathiness
-plot(yhat, breathy.test)
+plot(yhat, breathy.test, xlab = "predicted breathiness", ylab = "breathiness by SLPs" )
 abline (0,1)
 ```
 
@@ -206,13 +206,13 @@ test.completeB <- na.omit(breathy_test)
 train.completeB <- na.omit(breathy_train)
 breathy.forest = randomForest(Breathiness ~ ., data = train.completeB, mtry = 2, importance = TRUE)
 yhat.Bforest = predict(breathy.forest, newdata = test.completeB)
-plot(yhat.Bforest, test.completeB$Breathiness)
+plot(yhat.Bforest, test.completeB$Breathiness, xlab = "predicted breathiness", ylab = "breathiness by SLPs")
 abline(0,1)
 ```
 
 rmse:
 ```{r}
-sqrt(mean(yhat.Bforest - btest.complete$Breathiness)^2)
+sqrt(mean(yhat.Bforest - test.completeB$Breathiness)^2)
 ```
 
 Importance of variables:

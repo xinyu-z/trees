@@ -15,6 +15,7 @@ ggplot(data = merged, aes(x = Roughness, y = Breathiness)) +
 ```
 
 ```{r}
+library(dplyr)
 #excluding the upper-right-most and lower-left-most squares
 merged2 <- merged %>% 
   filter(!(Roughness > 750 & Breathiness > 750) & !(Roughness < 250 & Breathiness <250)) %>%
@@ -96,13 +97,12 @@ roughness_test <- AVQI_R[assignment == 2, ]
 
 ```{r}
 library(randomForest)
-library(randomForestExplainer)
 set.seed(0036)
 rough_trainC <- na.omit(roughness_train)
 rough_testC <- na.omit(roughness_test)
 rough_forest = randomForest(Roughness ~ ., data = rough_trainC, mtry = 2, importance = TRUE)
-yhat_forestR = predict(roughness_forest, newdata = rough_testC)
-plot(yhat_forestR, rough_testC$Roughness)
+yhat_forestR = predict(rough_forest, newdata = rough_testC)
+plot(yhat_forestR, rough_testC$Roughness, xlab = "predicted roughness", ylab = "roughness by SLPs" )
 abline(0,1)
 ```
 
@@ -146,7 +146,7 @@ breathy_trainC <- na.omit(breathiness_train)
 breathy_testC <- na.omit(breathiness_test)
 breathy_forest = randomForest(Breathiness ~ ., data = breathy_trainC, mtry = 2, importance = TRUE)
 yhat_forestB = predict(breathy_forest, newdata = breathy_testC)
-plot(yhat_forestB, breathy_testC$Breathiness)
+plot(yhat_forestB, breathy_testC$Breathiness, xlab = "predicted breathiness", ylab = "breathiness by SLPs")
 abline(0,1)
 ```
 
