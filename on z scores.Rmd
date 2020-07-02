@@ -1,0 +1,101 @@
+---
+title: "on z scores"
+author: "Xinyu Zhang"
+date: "7/2/2020"
+output: html_document
+---
+Reshaping the data:
+```{r}
+library(dplyr)
+#reading in listening test results
+listener1 <- read.csv("Results_AK.csv", header = TRUE, sep = ";")
+listener2 <- read.csv("Results_KS.csv", header = TRUE, sep = ";")
+#renaming the two answers, removing column "Num"
+SLP1 <- listener1 %>%
+  dplyr::select(-Num) %>% 
+  rename(Roughness = Answer1, Breathiness = Answer2)
+SLP1$dummy <- paste(SLP1$Speaker, "-", SLP1$T)
+#nrow(SLP1) #96
+
+SLP2 <- listener2 %>%
+  rename(Roughness = Answer1, Breathiness = Answer2)%>%
+  dplyr::select(-Num)
+SLP2$dummy <- paste(SLP2$Speaker, "-", SLP2$T)
+#nrow(SLP2) #96
+
+AVQI <- read.csv("AVQI_results_new.csv")
+AVQI$dummy <- paste(AVQI$Speaker, "-", AVQI$T)
+AVQI$Jitter <- as.numeric(levels(AVQI$Jitter))[AVQI$Jitter]
+```
+
+```{r}
+library(dplyr)
+mB1 <- mean(SLP1$Breathiness)#AK
+sdB1 <- sd(SLP1$Breathiness)#AK
+mB2 <- mean(SLP2$Breathiness)#KS
+sdB2 <- sd(SLP2$Breathiness)#KS
+mR1 <- mean(SLP1$Roughness)#AK
+sdR1 <- sd(SLP1$Roughness)#AK
+mR2 <- mean(SLP2$Roughness)#KS
+sdR2 <- sd(SLP2$Roughness)#KS
+zSLP1 <- SLP1 %>% 
+  mutate(zBreathy = (Breathiness-mB1)/sdB1, zRough = (Roughness-mR1)/sdR1) %>% 
+  dplyr::select(-A, -Z, -T)
+zSLP2 <- SLP2 %>% 
+  mutate(zBreathy = (Breathiness-mB2)/sdB2, zRough = (Roughness-mR2)/sdR2) %>% 
+  dplyr::select(-A, -Z, -T)
+zSLP <- full_join(zSLP1, zSLP2, by = "dummy") %>% 
+  dplyr::select(-Speaker.x, -Speaker.y)
+ 
+zSLP$mzB = rowMeans(zSLP[,c('zBreathy.x', 'zBreathy.y')], na.rm=TRUE)
+zSLP$mzR = rowMeans(zSLP[,c('zRough.x', 'zRough.y')], na.rm=TRUE)
+glimpse(zSLP)
+```
+
+```{r}
+#join the two listening results tables by matching both Speaker and T
+zAVQI_RB <-inner_join(AVQI,zSLP, by = "dummy") #%>% 
+  #dplyr::select(-Speaker.x, -Speaker.y, -T, -Version)
+#nrow(AVQI_RB) #192 (= 96 *2)
+glimpse(zAVQI_RB)
+nrow(zAVQI_RB)
+```
+
+```{r}
+zAVQI_RB_c <- na.omit(zAVQI_RB)#removing rows containing NAs
+nrow(zAVQI_RB_c)
+zRoughModel.tmp <- lm(mzR ~ CPPS + HNR + Jitter + Shimmer + ShdB + Slope + Tilt, zAVQI_RB_c)
+step(zRoughModel.tmp)
+zRoughModel <- step(zRoughModel.tmp)
+summary(zRoughModel)
+```
+HNR
+
+```{r}
+zBreathyModel.tmp <- lm(mzB ~ CPPS + HNR + Jitter + Shimmer + ShdB + Slope + Tilt, zAVQI_RB_c)
+zBreathyModel <- step(zBreathyModel.tmp)
+summary(zBreathyModel)
+```
+CPPS, HNR
+
+```{r}
+mzRoughModel <- lm(mzR ~ HNR + CPPS, zAVQI_RB_c)
+summary(mzRmodel)
+```
+HNR+CPPS for roughness
+
+```{r}
+mzBreathyModel <- lm(mzB ~ HNR + CPPS, zAVQI_RB_c)
+summary(mzBreathyModel)
+```
+CPPS, HNR not as significant
+
+```{r}
+	with(zAVQI_RB_c,plot(CPPS, mzR))
+	abline(mzRoughModel)
+	
+```
+```{r}
+	with(zAVQI_RB_c,plot(CPPS, mzB))
+	abline(mzBreathyModel)
+```
