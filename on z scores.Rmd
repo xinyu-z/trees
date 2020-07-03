@@ -91,11 +91,34 @@ summary(mzBreathyModel)
 CPPS, HNR not as significant
 
 ```{r}
-	with(zAVQI_RB_c,plot(CPPS, mzR))
-	abline(mzRoughModel)
-	
+plot(mzR ~ CPPS, data = zAVQI_RB_c)
+abline(mzRoughModel)
+	#see the predicted against by SLP plot and plot that
 ```
 ```{r}
-	with(zAVQI_RB_c,plot(CPPS, mzB))
-	abline(mzBreathyModel)
+plot(mzR ~ HNR, data = zAVQI_RB_c)
+abline(mzRoughModel)
 ```
+
+```{r}
+library(scatterplot3d)
+rough3d<- scatterplot3d(zAVQI_RB_c$HNR, zAVQI_RB_c$CPPS, zAVQI_RB_c$mzR, xlab = "HNR", ylab = "CPPS", zlab = "RoughZ")
+rough3d$plane3d(mzRoughModel)
+
+```
+
+```{r}
+plot(mzB ~ CPPS, data = zAVQI_RB_c)
+abline(mzBreathyModel)
+```
+
+```{r}
+plot(mzB ~ CPPS, data = zAVQI_RB_c)
+abline(mzBreathyModel)
+```
+	
+```{r}
+breathy3d<- scatterplot3d(zAVQI_RB_c$HNR, zAVQI_RB_c$CPPS, zAVQI_RB_c$mzB, xlab = "HNR", ylab = "CPPS", zlab = "BreathyZ")
+breathy3d$plane3d(mzBreathyModel)
+```
+
