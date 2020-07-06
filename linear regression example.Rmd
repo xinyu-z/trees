@@ -1,0 +1,18 @@
+---
+title: "linear regression example"
+author: "Xinyu Zhang"
+date: "7/6/2020"
+output: html_document
+---
+```{r}
+A <- (1:1000)/1000
+B <- 3/8*A + rnorm(1000, 0, 1/16);
+D <- A - B;
+
+Example <- as.data.frame(cbind(D,A,B));
+model <- lm(D ~ A + B, Example);
+summary(model)
+
+cor.test(Example$A, Example$B);
+cor.test(Example$D, Example$B);
+```
