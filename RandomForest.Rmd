@@ -227,8 +227,18 @@ Plotting the importance:
 varImpPlot(breathy.forest)
 ```
 
+```{r}
+plot(rough.forest)
+```
 
+```{r}
+getTree(rough.forest, k=40, labelVar=TRUE)
+```
 
+```{r}
+library(randomForestExplainer)
+explain_forest(rough.forest)
+```
 
 
 

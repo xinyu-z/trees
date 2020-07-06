@@ -54,17 +54,28 @@ glimpse(zSLP)
 
 ```{r}
 #join the two listening results tables by matching both Speaker and T
-zAVQI_RB <-inner_join(AVQI,zSLP, by = "dummy") #%>% 
+zAVQI <-inner_join(AVQI,zSLP, by = "dummy") #%>% 
   #dplyr::select(-Speaker.x, -Speaker.y, -T, -Version)
 #nrow(AVQI_RB) #192 (= 96 *2)
-glimpse(zAVQI_RB)
-nrow(zAVQI_RB)
+glimpse(zAVQI)
+nrow(zAVQI)
 ```
 
 ```{r}
-zAVQI_RB_c <- na.omit(zAVQI_RB)#removing rows containing NAs
-nrow(zAVQI_RB_c)
-zRoughModel.tmp <- lm(mzR ~ CPPS + HNR + Jitter + Shimmer + ShdB + Slope + Tilt, zAVQI_RB_c)
+breathyRough <- lm(mzB ~ mzR, data = zAVQI)
+summary(breathyRough)
+```
+
+```{r}
+mzBCorr <- fitted(breathyRough, zAVQI$mzR)
+zAVQI$mzBDecorr <- (zAVQI$mzB - mzBCorr)
+```
+
+
+```{r}
+zAVQI_c <- na.omit(zAVQI)#removing rows containing NAs
+nrow(zAVQI_c)
+zRoughModel.tmp <- lm(mzR ~ CPPS + HNR + Jitter + Shimmer + ShdB + Slope + Tilt, zAVQI_c)
 step(zRoughModel.tmp)
 zRoughModel <- step(zRoughModel.tmp)
 summary(zRoughModel)
@@ -72,53 +83,109 @@ summary(zRoughModel)
 HNR
 
 ```{r}
-zBreathyModel.tmp <- lm(mzB ~ CPPS + HNR + Jitter + Shimmer + ShdB + Slope + Tilt, zAVQI_RB_c)
-zBreathyModel <- step(zBreathyModel.tmp)
-summary(zBreathyModel)
+mzRoughModel <- lm(mzR ~ HNR + CPPS, data = zAVQI_c)
+summary(mzRoughModel)
 ```
-CPPS, HNR
 
 ```{r}
-mzRoughModel <- lm(mzR ~ HNR + CPPS, zAVQI_RB_c)
-summary(mzRmodel)
+zBrDecorrModel.tmp <- lm(mzBDecorr ~ CPPS + HNR + Jitter + Shimmer + ShdB + Slope + Tilt, zAVQI_c)
+zBrDecorrModel <- step(zBrDecorrModel.tmp)
+summary(zBrDecorrModel)
 ```
-HNR+CPPS for roughness
+CPPS, HNR, ShdB
 
 ```{r}
-mzBreathyModel <- lm(mzB ~ HNR + CPPS, zAVQI_RB_c)
+BrDecorr <- lm(mzBDecorr ~ CPPS + HNR + ShdB, data = zAVQI_c) 
+summary(BrDecorr)
+```
+^ShdB becomes not significant
+
+```{r}
+mzBreathyModel <- lm(mzB ~ HNR + CPPS, data = zAVQI_c)
 summary(mzBreathyModel)
 ```
-CPPS, HNR not as significant
+HNR+CPPS for breathiness, HNR not as significant
 
 ```{r}
-plot(mzR ~ CPPS, data = zAVQI_RB_c)
+mzBreathyModel2 <- lm(mzB ~ HNR + CPPS+ ShdB, data = zAVQI_c)
+summary(mzBreathyModel2)
+```
+^HNR becomes even less significant after adding in ShdB.
+
+```{r}
+plot(mzR ~ CPPS, data = zAVQI_c)
 abline(mzRoughModel)
 	#see the predicted against by SLP plot and plot that
 ```
 ```{r}
-plot(mzR ~ HNR, data = zAVQI_RB_c)
+plot(mzR ~ HNR, data = zAVQI_c)
 abline(mzRoughModel)
 ```
 
 ```{r}
 library(scatterplot3d)
-rough3d<- scatterplot3d(zAVQI_RB_c$HNR, zAVQI_RB_c$CPPS, zAVQI_RB_c$mzR, xlab = "HNR", ylab = "CPPS", zlab = "RoughZ")
+rough3d<- scatterplot3d(zAVQI_c$HNR, zAVQI_c$CPPS, zAVQI_c$mzR, xlab = "HNR", ylab = "CPPS", zlab = "RoughZ")
 rough3d$plane3d(mzRoughModel)
 
 ```
 
 ```{r}
-plot(mzB ~ CPPS, data = zAVQI_RB_c)
+plot(mzRoughModel)
+```
+
+```{r}
+plot(mzB ~ CPPS, data = zAVQI_c)
 abline(mzBreathyModel)
 ```
 
 ```{r}
-plot(mzB ~ CPPS, data = zAVQI_RB_c)
+plot(mzB ~ CPPS, data = zAVQI_c)
 abline(mzBreathyModel)
 ```
-	
+
+
+The regression line is not showing up on the scatter plot, trying directly "plot(model)"
 ```{r}
-breathy3d<- scatterplot3d(zAVQI_RB_c$HNR, zAVQI_RB_c$CPPS, zAVQI_RB_c$mzB, xlab = "HNR", ylab = "CPPS", zlab = "BreathyZ")
+plot(mzBreathyModel)
+```
+
+
+
+```{r}
+breathy3d<- scatterplot3d(zAVQI_c$CPPS, zAVQI_c$HNR, zAVQI_c$mzB, xlab = "HNR", ylab = "CPPS", zlab = "BreathyZ")
 breathy3d$plane3d(mzBreathyModel)
+```
+
+```{r}
+breathy3dDecorr<- scatterplot3d(x = zAVQI_c$HNR, y = zAVQI_c$CPPS, z = zAVQI_c$mzBDecorr, xlab = "HNR", ylab = "CPPS", zlab = "BreathyZ")
+breathy3dDecorr$plane3d(mzBreathyModel)
+```
+
+```{r}
+plot(AVQI ~ CPPS, data = zAVQI)
+```
+
+```{r}
+severityCPPS<-lm(AVQI ~ CPPS, data = zAVQI)
+summary(severityCPPS)
+```
+
+```{r}
+plot(AVQI ~ HNR, data = zAVQI)
+```
+
+```{r}
+severityHNR <- lm(AVQI ~ HNR, data = zAVQI)
+summary(severityHNR)
+```
+
+```{r}
+breathyHNR<- lm(mzB ~ HNR, data = zAVQI)
+summary(breathyHNR)
+```
+
+```{r}
+decorrBrHNR <- lm(mzBDecorr ~ HNR, data = zAVQI)
+summary(decorrBrHNR)
 ```
 

@@ -1,5 +1,5 @@
 ---
-title: "Jun26"
+title: "linear models"
 author: "Xinyu Zhang"
 date: "6/26/2020"
 output: html_document
@@ -75,8 +75,7 @@ str(AVQI_mRB)
 ```
 
 ```{r}
-#removing NAs
-AVQI_mRB_c <- na.omit(AVQI_mRB)
+AVQI_mRB_c <- na.omit(AVQI_mRB)#removing NAs
 mRoughModel.tmp <- lm(RoughMean ~ CPPS + HNR + Jitter + Shimmer + ShdB + Slope + Tilt, AVQI_mRB_c)
 step(mRoughModel.tmp)
 mRoughModel <- step(mRoughModel.tmp)
@@ -136,6 +135,8 @@ BreathyCorrelated <- fitted(BreathyModel, AVQI_RB$Roughness)
 
 # Part of Breathiness not predicted by Roughness
 AVQI_RB$BreathyDecorr <- AVQI_RB$Breathiness - BreathyCorrelated
+
+
 ```
 
 For Roughness:
