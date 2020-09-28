@@ -1,0 +1,189 @@
+---
+title: "Jul.6"
+author: "Xinyu Zhang"
+date: "7/6/2020"
+output:
+  pdf_document: default
+---
+## Generating the Files
+```{r}
+library(dplyr)
+#reading in listening test results:
+listener1 <- read.csv("Results_AK.csv", header = TRUE, sep = ";")
+listener2 <- read.csv("Results_KS.csv", header = TRUE, sep = ";")
+
+#renaming the two answers, removing the column "Num", 
+#and adding a dummy variable (= speaker + T) as an identifier for when joining two datasets:
+SLP1 <- listener1 %>%
+  dplyr::select(-Num) %>% 
+  rename(Roughness = Answer1, Breathiness = Answer2)
+SLP1$dummy <- paste(SLP1$Speaker, "-", SLP1$T)
+#nrow(SLP1) #96
+SLP2 <- listener2 %>%
+  rename(Roughness = Answer1, Breathiness = Answer2)%>%
+  dplyr::select(-Num)
+SLP2$dummy <- paste(SLP2$Speaker, "-", SLP2$T)
+#nrow(SLP2) #96
+
+AVQI <- read.csv("AVQI_results_new.csv")
+#adding an dummy variable (= speaker + T) as an identifier when joining two datasets:
+AVQI$dummy <- paste(AVQI$Speaker, "-", AVQI$T)
+#converting "Jitter" as a numeric value from a factor (this introduces new NAs):
+AVQI$Jitter <- as.numeric(levels(AVQI$Jitter))[AVQI$Jitter]
+
+#defining the mean and sd of the Brethiness and Roughness scores:
+library(dplyr)
+mB1 <- mean(SLP1$Breathiness)#AK
+sdB1 <- sd(SLP1$Breathiness)#AK
+mB2 <- mean(SLP2$Breathiness)#KS
+sdB2 <- sd(SLP2$Breathiness)#KS
+mR1 <- mean(SLP1$Roughness)#AK
+sdR1 <- sd(SLP1$Roughness)#AK
+mR2 <- mean(SLP2$Roughness)#KS
+sdR2 <- sd(SLP2$Roughness)#KS
+
+#adding a column containing z-values for each NLP score table
+zSLP1 <- SLP1 %>% 
+  mutate(zBreathy = (Breathiness-mB1)/sdB1, zRough = (Roughness-mR1)/sdR1) %>% 
+  select(-A, -Z, -T)
+zSLP2 <- SLP2 %>% 
+  mutate(zBreathy = (Breathiness-mB2)/sdB2, zRough = (Roughness-mR2)/sdR2) %>% 
+  select(-A, -Z, -T)
+
+#joining the scores from two SLPs, by matching the dummy identifier, and removing redundant rows
+zSLP <- full_join(zSLP1, zSLP2, by = "dummy") %>% 
+  select(-Speaker.x, -Speaker.y)
+
+#calculating the mean of z scores for each token of recording
+zSLP$mzB = rowMeans(zSLP[,c('zBreathy.x', 'zBreathy.y')], na.rm=TRUE)
+zSLP$mzR = rowMeans(zSLP[,c('zRough.x', 'zRough.y')], na.rm=TRUE)
+
+#join the two SLP results tables with AVQI by matching both Speaker and T
+zAVQI_ <-inner_join(AVQI,zSLP, by = "dummy")
+zAVQI <- na.omit(zAVQI_)#removing rows containing NAs
+
+#write the file for later convenience
+write.csv(zAVQI, "zAVQI.csv")
+#zAVQI.csv now has the AVQI data and the SLP ratings combined and matched, 
+#and with the variables in the right classes
+library(ggplot2)
+ggplot(data = zAVQI, aes(x = mzB, y = mzR)) + 
+  geom_point() +
+  geom_smooth(method = "lm")
+#ggsave("z_Corre.png", plot = last_plot(), device = NULL, scale = 1, width = 10, height = 6, units = c("cm"), dpi = 600)
+```
+
+## Step-wise model comparison
+```{r}
+#decorrelating breathiness from roughness:
+breathyRough <- lm(mzB ~ mzR, data = zAVQI)
+plot(breathyRough)
+mzBCorr <- fitted(breathyRough, zAVQI$mzR)
+zAVQI$mzBDecorr <- (zAVQI$mzB - mzBCorr)
+
+#using step to determine the best linear model
+##roughness
+zRoughModel.tmp <- lm(mzR ~ CPPS + HNR + Jitter + Shimmer + ShdB + Slope + Tilt, zAVQI)
+#using BIC instead of AIC
+zRoughModel <- step(zRoughModel.tmp, k = log(nrow(zAVQI)))
+
+##breathiness
+zBrDecorrModel.tmp <- lm(mzBDecorr ~ CPPS + HNR + Jitter + Shimmer + ShdB + Slope + Tilt, zAVQI)
+#zBrDecorrModel <- step(zBrDecorrModel.tmp)
+#using BIC instead of AIC:
+zBrDecorrModel <- step(zBrDecorrModel.tmp, k = log(nrow(zAVQI)))
+
+#summarizing the two models
+summary(zRoughModel)
+summary(zBrDecorrModel)
+
+#mBreathyModel <- step(mBreathyModel.tmp)
+#mBreathyModel <- step(mBreathyModel.tmp, k=log(nrow(zAVQI)))
+#AIC: k=2
+#BIC: k=log(n)
+#BIC includes as few predictors as possible, avoids overfitting
+```
+
+^The Above suggests that the best predictors for the roughness model are CPPS and HNR, ShdB and Tilt; the best predictors for the decorrelated breathiness model are CPPS, HNR, and ShdB, Shimmer.
+
+Sep15: best predictors for roughness are HNR and the spectral tilt. 
+best predictors for decoorrelated breathiness are CPPS and HNR.
+
+Since the variables for two models overlap, the rebuilt (correleated-to-roughness) breathiness model will use exactly the same variables as the decorrelated model, only with the original (non-decorrelated) breathiness scores as the independent variable.
+
+## Generating the output
+```{r}
+#running the models:
+rough.model <- lm(mzR ~ HNR + Tilt, data = zAVQI)
+summary(rough.model)
+
+breathyDecorr.model <- lm(mzBDecorr ~ HNR + CPPS, data = zAVQI)
+summary(breathyDecorr.model)
+
+#the reconstructed breathiness model 
+#(using "mzB" instead of "mzBDecorr" as the independent variable here:
+breathy.model <- lm(mzB ~ HNR + CPPS + Tilt, data = zAVQI)
+summary(breathy.model)
+
+# mBreathyModel #<- step(mBreathyModel.tmp)
+# mBreathyModel <- step(mBreathyModel.tmp, k=log(nrow(zAVQI)))
+#AIC: k=2
+#BIC: k=log(n)
+
+#https://www.biorxiv.org/content/biorxiv/early/2019/01/08/449751.full.pdf
+
+# radiochemo (improves better) and laser therapy severe 
+
+#tumors on the vocal folds 
+#laser ecxitions or radio therapy or both because ethical committee approval not for medical
+#p-value not as useful anymore because the data has already undergone model selection
+#look at adjusted R-squared instead
+plot(breathyDecorr.model$residuals)
+```
+Both CPPS and HNR are significant for Roughness (Adjusted R-squared = 0.3243). Only CPPS turned out to be significant for Breathiness (not including ShdB could result in a better p-value for HNR, this could be argued by adding in one more step to evaluate the BreathDecorr model), Adjusted R-squared = 0.5692.
+
+## Plots
+```{r}
+library(scatterplot3d)
+par(mfrow = c(1,2))
+#roughness:
+rough3d<- scatterplot3d(zAVQI$HNR, zAVQI$CPPS, zAVQI$mzR, xlab = "HNR", ylab = "CPPS", zlab = "Roughness-Z")
+rough3d$plane3d(rough.model)
+
+#breathiness:
+breathy3d<- scatterplot3d(zAVQI$HNR, zAVQI$CPPS, zAVQI$mzB, xlab = "HNR", ylab = "CPPS", zlab = "Breathiness-Z")
+breathy.model2 <- lm(mzB ~ HNR + CPPS, data = zAVQI)
+rough3d$plane3d(breathy.model2)
+```
+
+```{r}
+#linear regression
+head(zAVQI)
+library(lme4)
+#setting contrast
+contrast <- cbind(c(0.5, -0.5)) #AK,KS
+colnames(contrast) <- c("SubjectAK-SubjectKS")
+contrasts(table$Subject) <- contrast
+#Roughness ~ Breathiness, with Speaker as a random effect
+model1 <- lmer(Roughness ~ Subject + (Subject | Speaker), data = table, REML = TRUE, na.action = "na.omit")
+
+model2 <- lm(Roughness ~ Subject, data = zAVQI, REML = TRUE, na.action = "na.omit")
+
+model3 <- lm(Breathiness ~ Subject, data = table, REML = TRUE, na.action = "na.omit")
+
+summary(model2)
+```
+```{r}
+ggplot(data = zAVQI, aes(x = mzR, y = mzB)) + 
+  geom_point() +
+  geom_smooth(method = "lm")
+```
+
+```{r}
+ggplot(data = zAVQI, aes(x = mzR, y = mzBDecorr)) + 
+  geom_point() +
+  geom_smooth(method = "lm")
+ggsave("rough-DecorrBreathy.png", plot = last_plot(), device = NULL)
+```
+
+
