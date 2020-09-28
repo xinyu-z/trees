@@ -177,13 +177,14 @@ summary(model2)
 ggplot(data = zAVQI, aes(x = mzR, y = mzB)) + 
   geom_point() +
   geom_smooth(method = "lm")
+ggsave("z_Corre.png", plot = last_plot(), device = NULL)
 ```
 
 ```{r}
 ggplot(data = zAVQI, aes(x = mzR, y = mzBDecorr)) + 
   geom_point() +
   geom_smooth(method = "lm")
-ggsave("rough-DecorrBreathy.png", plot = last_plot(), device = NULL)
+#ggsave("rough-DecorrBreathy.png", plot = last_plot(), device = NULL)
 ```
 
 
