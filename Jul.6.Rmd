@@ -187,4 +187,14 @@ ggplot(data = zAVQI, aes(x = mzR, y = mzBDecorr)) +
 #ggsave("rough-DecorrBreathy.png", plot = last_plot(), device = NULL)
 ```
 
+```{r}
+glimpse(zAVQI)
+roughVar<-lm(Roughness.x~Roughness.y, data = zAVQI)
+summary(roughVar)
+```
+```{r}
+breathyVar<-lm(Breathiness.x~Breathiness.y, data = zAVQI)
+summary(breathyVar)
+```
+
 
