@@ -151,9 +151,9 @@ rough3d<- scatterplot3d(zAVQI$HNR, zAVQI$CPPS, zAVQI$mzR, xlab = "HNR", ylab = "
 rough3d$plane3d(rough.model)
 
 #breathiness:
-breathy3d<- scatterplot3d(zAVQI$HNR, zAVQI$CPPS, zAVQI$mzB, xlab = "HNR", ylab = "CPPS", zlab = "Breathiness-Z")
-breathy.model2 <- lm(mzB ~ HNR + CPPS, data = zAVQI)
-rough3d$plane3d(breathy.model2)
+breathyDecorr3d<- scatterplot3d(zAVQI$HNR, zAVQI$CPPS, zAVQI$mzB, xlab = "HNR", ylab = "CPPS", zlab = "Breathiness-Z(Decorrelated)")
+breathyDecorr3d$plane3d(breathyDecorr.model)
+
 ```
 
 ```{r}
